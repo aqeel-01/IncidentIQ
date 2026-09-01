@@ -18,14 +18,13 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+# Importing the models package registers every table on Base.metadata so
+# autogenerate can detect the full schema.
+import app.db.models  # noqa: E402, F401
 from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import make_async_url
-
-# Import model modules here so their tables register on Base.metadata, e.g.:
-#   import app.db.models  # noqa: F401
-# No application models exist yet.
 
 config = context.config
 

@@ -51,6 +51,14 @@ Optional services being unavailable must not make the application unusable.
 | `RCA_TEMPERATURE`      | `0.1`                       | Sampling temperature, `0.0`–`2.0`.                 |
 | `RCA_MAX_TOKENS`       | `2048`                      | Max tokens for RCA generation (> 0).               |
 
+## Log uploads
+
+| Variable                  | Default           | Description                                      |
+| ------------------------- | ----------------- | ------------------------------------------------ |
+| `LOG_UPLOAD_DIR`          | `data/uploads`    | Directory for streamed upload files on disk.     |
+| `LOG_UPLOAD_MAX_BYTES`    | `104857600` (100MB) | Maximum accepted upload size in bytes.       |
+| `LOG_UPLOAD_CHUNK_BYTES`  | `1048576` (1MB)   | Read/write chunk size while streaming uploads.   |
+
 > AI providers are configuration-only at this stage; the provider
 > implementations are added in a later step.
 

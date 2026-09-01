@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     rca_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     rca_max_tokens: int = Field(default=2048, gt=0)
 
+    # --- Log uploads ---------------------------------------------------------
+    log_upload_dir: str = "data/uploads"
+    log_upload_max_bytes: int = Field(default=100 * 1024 * 1024, gt=0)
+    log_upload_chunk_bytes: int = Field(default=1024 * 1024, gt=0)
+
     @field_validator("database_url", "redis_url")
     @classmethod
     def _not_blank(cls, value: str) -> str:
