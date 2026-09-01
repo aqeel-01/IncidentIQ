@@ -1,0 +1,48 @@
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+frontend/build/
+.next/
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Docker / data ---
+*.log
+data/
+pgdata/
+
+# --- Local databases ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Project spec / internal docs (not tracked in repo) ---
+srs.md
+code_of_conduct.md
