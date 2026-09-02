@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from app.db.models.enums import EventType, IncidentStatus, Severity
 from app.db.models.error_group import ErrorGroup
+from app.db.models.error_group_similarity_candidate import ErrorGroupSimilarityCandidate
 from app.db.models.event import Event
 from app.db.models.incident import Incident
 from app.db.models.log_upload import LogUpload, LogUploadStatus
@@ -27,6 +28,7 @@ __all__ = [
     "Incident",
     "Event",
     "ErrorGroup",
+    "ErrorGroupSimilarityCandidate",
     "LogUpload",
     "LogUploadStatus",
 ]

@@ -17,6 +17,7 @@ CORE_TABLES = {
     "incidents",
     "events",
     "error_groups",
+    "error_group_similarity_candidates",
     "log_uploads",
 }
 

@@ -29,6 +29,9 @@ backend/          FastAPI backend application
       events.py   Canonical event models (LogEvent, MetricEvent, …)
       ingestion.py Event ingestion service (validate → persist)
       uploads.py  Log upload validation and streaming persistence
+    parsing/      Log format detection, incremental parsers, manual field mapping
+    normalization/ Log field + message pattern normalization
+    fingerprinting.py Deterministic SHA-256 event fingerprints
     db/           Declarative base, async engine, session management
       models/     Core ORM models (organizations, users, projects, …)
   alembic/        Database migrations (async Alembic environment)

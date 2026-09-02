@@ -74,6 +74,19 @@ class Settings(BaseSettings):
     log_upload_max_bytes: int = Field(default=100 * 1024 * 1024, gt=0)
     log_upload_chunk_bytes: int = Field(default=1024 * 1024, gt=0)
 
+    # --- Error-group similarity ------------------------------------------------
+    error_similarity_high_confidence_min: float = Field(default=0.92, ge=0.0, le=1.0)
+    error_similarity_possible_match_min: float = Field(default=0.75, ge=0.0, le=1.0)
+
+    @field_validator("error_similarity_high_confidence_min")
+    @classmethod
+    def _high_confidence_above_possible(cls, value: float, info) -> float:
+        possible = info.data.get("error_similarity_possible_match_min")
+        if possible is not None and value <= possible:
+            msg = "error_similarity_high_confidence_min must be > possible_match_min"
+            raise ValueError(msg)
+        return value
+
     @field_validator("database_url", "redis_url")
     @classmethod
     def _not_blank(cls, value: str) -> str:

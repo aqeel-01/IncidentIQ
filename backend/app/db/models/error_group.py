@@ -23,6 +23,9 @@ from app.db.models.enums import Severity
 from app.db.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.db.models.error_group_similarity_candidate import (
+        ErrorGroupSimilarityCandidate,
+    )
     from app.db.models.event import Event
     from app.db.models.project import Project
     from app.db.models.service import Service
@@ -67,3 +70,19 @@ class ErrorGroup(TimestampMixin, Base):
     project: Mapped[Project] = relationship(back_populates="error_groups")
     service: Mapped[Service | None] = relationship(back_populates="error_groups")
     events: Mapped[list[Event]] = relationship(back_populates="error_group")
+    similarity_candidates_as_source: Mapped[list[ErrorGroupSimilarityCandidate]] = (
+        relationship(
+            foreign_keys="ErrorGroupSimilarityCandidate.source_error_group_id",
+            back_populates="source_error_group",
+            cascade="all, delete-orphan",
+            passive_deletes=True,
+        )
+    )
+    similarity_candidates_as_candidate: Mapped[list[ErrorGroupSimilarityCandidate]] = (
+        relationship(
+            foreign_keys="ErrorGroupSimilarityCandidate.candidate_error_group_id",
+            back_populates="candidate_error_group",
+            cascade="all, delete-orphan",
+            passive_deletes=True,
+        )
+    )
