@@ -19,6 +19,9 @@ CORE_TABLES = {
     "error_groups",
     "error_group_similarity_candidates",
     "log_uploads",
+    "evidence_groups",
+    "evidence",
+    "evidence_relations",
 }
 
 

@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.enums import Severity
+
+if TYPE_CHECKING:
+    from app.domain.correlation.types import (
+        DeploymentCorrelationAssessment,
+        ServiceCorrelationResult,
+        TemporalCorrelation,
+    )
+    from app.domain.evidence.types import EvidenceGroup
 
 
 class TimelineCategory(enum.StrEnum):
@@ -64,3 +72,7 @@ class TimelineResult(BaseModel):
     entries: list[TimelineEntry]
     markers: TimelineMarkers
     counts: dict[str, int]
+    correlations: list[TemporalCorrelation] = Field(default_factory=list)
+    deployment_correlation: DeploymentCorrelationAssessment | None = None
+    service_correlation: ServiceCorrelationResult | None = None
+    evidence_group: EvidenceGroup | None = None

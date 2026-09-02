@@ -1,9 +1,8 @@
-"""Tests for the incident timeline API."""
+"""Tests for the incident evidence API."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
-from datetime import datetime
 
 import pytest
 import pytest_asyncio
@@ -16,13 +15,7 @@ from app.core.config import Settings, get_settings
 from app.db.base import Base
 from app.db.models import Severity
 from app.db.session import get_db
-from app.domain.events import (
-    AlertEvent,
-    AlertStatus,
-    DeploymentEvent,
-    LogEvent,
-    MetricEvent,
-)
+from app.domain.events import DeploymentEvent, LogEvent
 from app.domain.incidents import CreateIncidentInput, IncidentService
 from app.domain.ingestion import EventIngestionService
 from app.main import create_app
@@ -30,7 +23,7 @@ from tests.test_timeline_service import _base_event_fields, _seed_project, _ts
 
 
 @pytest.fixture
-def timeline_settings() -> Settings:
+def evidence_settings() -> Settings:
     return Settings(
         _env_file=None,
         app_env="test",
@@ -41,10 +34,10 @@ def timeline_settings() -> Settings:
 
 @pytest_asyncio.fixture
 async def db_session(
-    timeline_settings: Settings,
+    evidence_settings: Settings,
 ) -> AsyncIterator[AsyncSession]:
     engine = create_async_engine(
-        timeline_settings.database_url,
+        evidence_settings.database_url,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
@@ -65,11 +58,11 @@ async def db_session(
 
 @pytest.fixture
 def api_client(
-    timeline_settings: Settings,
+    evidence_settings: Settings,
     db_session: AsyncSession,
 ) -> Iterator[TestClient]:
-    app = create_app(settings=timeline_settings)
-    app.dependency_overrides[get_settings] = lambda: timeline_settings
+    app = create_app(settings=evidence_settings)
+    app.dependency_overrides[get_settings] = lambda: evidence_settings
 
     async def _override_db() -> AsyncIterator[AsyncSession]:
         yield db_session
@@ -83,7 +76,7 @@ def api_client(
 
 
 @pytest.mark.asyncio
-async def test_get_timeline_returns_chronological_payload(
+async def test_get_evidence_builds_structured_package(
     api_client: TestClient,
     db_session: AsyncSession,
 ) -> None:
@@ -94,31 +87,16 @@ async def test_get_timeline_returns_chronological_payload(
         project.id,
         [
             DeploymentEvent(
-                timestamp=_ts(-30),
+                timestamp=_ts(-20),
                 version="v1.0.0",
                 commit_sha="abc",
                 repository="payments-api",
                 service="payments-api",
                 **_base_event_fields(),
             ),
-            MetricEvent(
-                timestamp=_ts(-5),
-                metric_name="latency_ms",
-                value=900.0,
-                service="payments-api",
-                **_base_event_fields(),
-            ),
             LogEvent(
                 timestamp=_ts(0),
                 message="checkout failed",
-                severity=Severity.CRITICAL,
-                service="payments-api",
-                **_base_event_fields(),
-            ),
-            AlertEvent(
-                timestamp=_ts(5),
-                name="CheckoutFailures",
-                status=AlertStatus.FIRING,
                 severity=Severity.CRITICAL,
                 service="payments-api",
                 **_base_event_fields(),
@@ -140,38 +118,29 @@ async def test_get_timeline_returns_chronological_payload(
     ).incident
     await db_session.commit()
 
-    response = api_client.get(f"/api/v1/timeline/{incident.id}")
+    response = api_client.get(f"/api/v1/evidence/{incident.id}")
 
     assert response.status_code == 200
     body = response.json()
     assert body["incident_id"] == incident.id
-    assert body["project_id"] == project.id
-    assert len(body["entries"]) == 4
+    assert body["evidence"]
+    assert body["relations"] is not None
 
-    entry_times = [
-        datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
-        for entry in body["entries"]
-    ]
-    assert entry_times == sorted(entry_times)
-
-    markers = body["markers"]
-    assert markers["first_anomaly"]["category"] == "metric"
-    assert markers["first_relevant_error"]["category"] == "log"
-    assert markers["first_alert"]["title"] == "CheckoutFailures"
-    assert markers["recent_deployment"]["title"] == "v1.0.0 abc"
-    assert markers["recovery"] is None
-    assert "correlations" in body
-    assert len(body["correlations"]) >= 2
-    kinds = {item["kind"] for item in body["correlations"]}
-    assert "deployment_to_error" in kinds
-    assert "error_to_alert" in kinds
-    assert body["deployment_correlation"] is not None
-    assert body["deployment_correlation"]["is_related"] is True
-    assert body["deployment_correlation"]["supporting_evidence"]
-    assert body["service_correlation"] is not None
-    assert body["service_correlation"]["services"]
+    first = body["evidence"][0]
+    assert "source" in first
+    assert "timestamp" in first
+    assert "event_reference" in first
+    assert "description" in first
+    assert "confidence" in first
+    assert "supporting_or_contradicting" in first
+    assert body["evidence_graph"] is not None
+    assert body["evidence_graph"]["chain"]
+    assert body["quality"] is not None
+    assert 0 <= body["quality"]["score"] <= 100
+    assert "breakdown" in body["quality"]
+    assert "summary" in body["quality"]
 
 
-def test_get_timeline_returns_404_for_missing_incident(api_client: TestClient) -> None:
-    response = api_client.get("/api/v1/timeline/999")
+def test_get_evidence_returns_404_for_missing_incident(api_client: TestClient) -> None:
+    response = api_client.get("/api/v1/evidence/999")
     assert response.status_code == 404

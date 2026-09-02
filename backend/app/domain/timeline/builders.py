@@ -43,6 +43,8 @@ def event_to_timeline_entry(row: Event) -> TimelineEntry:
     }
     if row.normalized_data:
         metadata["normalized_data"] = dict(row.normalized_data)
+    if row.service_id is not None:
+        metadata["service_id"] = row.service_id
 
     return TimelineEntry(
         id=f"event:{row.id}",
@@ -60,6 +62,14 @@ def event_to_timeline_entry(row: Event) -> TimelineEntry:
 def error_group_to_timeline_entry(group: ErrorGroup) -> TimelineEntry:
     """Convert an ``ErrorGroup`` into a timeline error entry."""
 
+    metadata: dict[str, Any] = {
+        "occurrence_count": group.occurrence_count,
+        "fingerprint": group.fingerprint,
+        "last_seen": _to_utc(group.last_seen).isoformat(),
+    }
+    if group.service_id is not None:
+        metadata["service_id"] = group.service_id
+
     return TimelineEntry(
         id=f"error_group:{group.id}",
         category=TimelineCategory.ERROR,
@@ -71,11 +81,7 @@ def error_group_to_timeline_entry(group: ErrorGroup) -> TimelineEntry:
         ),
         severity=group.severity,
         error_group_id=group.id,
-        metadata={
-            "occurrence_count": group.occurrence_count,
-            "fingerprint": group.fingerprint,
-            "last_seen": _to_utc(group.last_seen).isoformat(),
-        },
+        metadata=metadata,
     )
 
 

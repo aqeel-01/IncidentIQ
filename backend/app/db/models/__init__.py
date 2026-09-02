@@ -7,6 +7,9 @@ Importing this package registers every model on ``Base.metadata``. Alembic's
 from __future__ import annotations
 
 from app.db.models.enums import EventType, IncidentStatus, Severity
+from app.db.models.evidence import Evidence
+from app.db.models.evidence_group import EvidenceGroup
+from app.db.models.evidence_relation import EvidenceRelation
 from app.db.models.error_group import ErrorGroup
 from app.db.models.error_group_similarity_candidate import ErrorGroupSimilarityCandidate
 from app.db.models.event import Event
@@ -29,6 +32,9 @@ __all__ = [
     "Event",
     "ErrorGroup",
     "ErrorGroupSimilarityCandidate",
+    "Evidence",
+    "EvidenceGroup",
+    "EvidenceRelation",
     "LogUpload",
     "LogUploadStatus",
 ]

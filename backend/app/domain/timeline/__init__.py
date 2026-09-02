@@ -1,6 +1,5 @@
 """Incident timeline engine."""
 
-from app.domain.timeline.service import TimelineService
 from app.domain.timeline.types import (
     TimelineCategory,
     TimelineEntry,
@@ -13,5 +12,4 @@ __all__ = [
     "TimelineEntry",
     "TimelineMarkers",
     "TimelineResult",
-    "TimelineService",
 ]

@@ -34,3 +34,25 @@ class EventType(enum.StrEnum):
     ALERT = "ALERT"
     DEPLOYMENT = "DEPLOYMENT"
     TRACE = "TRACE"
+
+
+class EvidenceSource(enum.StrEnum):
+    ANOMALY_DETECTION = "anomaly_detection"
+    TEMPORAL_CORRELATION = "temporal_correlation"
+    DEPLOYMENT_CORRELATION = "deployment_correlation"
+    SERVICE_CORRELATION = "service_correlation"
+    TIMELINE_MARKER = "timeline_marker"
+
+
+class EvidenceStance(enum.StrEnum):
+    SUPPORTING = "supporting"
+    CONTRADICTING = "contradicting"
+    NEUTRAL = "neutral"
+
+
+class EvidenceRelationKind(enum.StrEnum):
+    SUPPORTS = "supports"
+    CONTRADICTS = "contradicts"
+    CORRELATES_WITH = "correlates_with"
+    CAUSED_BY = "caused_by"
+    RELATED_TO = "related_to"

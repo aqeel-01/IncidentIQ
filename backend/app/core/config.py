@@ -87,6 +87,45 @@ class Settings(BaseSettings):
     metric_anomaly_percentile_high_threshold: float = Field(default=95.0, ge=0, le=100)
     metric_anomaly_min_stddev: float = Field(default=1e-9, gt=0)
 
+    # --- Temporal correlation --------------------------------------------------
+    correlation_deployment_to_error_max_lag_minutes: int = Field(
+        default=120,
+        gt=0,
+    )
+    correlation_metric_anomaly_to_error_max_lag_minutes: int = Field(
+        default=30,
+        gt=0,
+    )
+    correlation_error_to_alert_max_lag_minutes: int = Field(
+        default=15,
+        gt=0,
+    )
+    correlation_min_score: float = Field(default=0.1, ge=0.0, le=1.0)
+
+    # --- Deployment correlation -----------------------------------------------
+    deployment_correlation_lookback_hours: int = Field(default=24, gt=0)
+    deployment_correlation_min_relationship_score: float = Field(
+        default=0.4,
+        ge=0.0,
+        le=1.0,
+    )
+
+    # --- Service correlation ---------------------------------------------------
+    service_correlation_trace_to_error_max_lag_minutes: int = Field(
+        default=5,
+        gt=0,
+    )
+    service_correlation_upstream_max_lag_minutes: int = Field(default=15, gt=0)
+    service_correlation_min_score: float = Field(default=0.2, ge=0.0, le=1.0)
+    service_correlation_same_service_weight: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+    )
+    service_correlation_temporal_weight: float = Field(default=0.4, ge=0.0, le=1.0)
+    service_correlation_dependency_weight: float = Field(default=0.3, ge=0.0, le=1.0)
+    service_correlation_trace_weight: float = Field(default=0.3, ge=0.0, le=1.0)
+
     @field_validator("error_similarity_high_confidence_min")
     @classmethod
     def _high_confidence_above_possible(cls, value: float, info) -> float:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,8 +11,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.enums import Severity
 from app.db.session import get_db
-from app.domain.timeline import TimelineService
-from app.domain.timeline.types import TimelineCategory, TimelineEntry, TimelineMarkers
+from app.domain.correlation.types import (
+    CorrelationKind,
+    DeploymentCorrelationAssessment,
+    DeploymentEvidence,
+    DeploymentEvidenceKind,
+    ScoredServiceRelationship,
+    ServiceCorrelationResult,
+    ServiceDependencyEdge,
+    ServiceRelationshipEvidence,
+    ServiceRelationshipKind,
+    ServiceRelationshipSignal,
+    TemporalCorrelation,
+)
+from app.domain.timeline.service import TimelineService
+from app.domain.timeline.types import (
+    TimelineCategory,
+    TimelineEntry,
+    TimelineMarkers,
+)
 
 router = APIRouter(prefix="/api/v1/timeline", tags=["timeline"])
 
@@ -43,6 +60,75 @@ class TimelineMarkersResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class TemporalCorrelationResponse(BaseModel):
+    kind: CorrelationKind
+    source: TimelineEntryResponse
+    target: TimelineEntryResponse
+    time_difference: timedelta
+    correlation_score: float
+    reason: str
+
+    model_config = ConfigDict(frozen=True)
+
+
+class DeploymentEvidenceResponse(BaseModel):
+    kind: DeploymentEvidenceKind
+    detail: str
+    weight: float
+
+    model_config = ConfigDict(frozen=True)
+
+
+class DeploymentCorrelationResponse(BaseModel):
+    is_related: bool
+    relationship_score: float
+    deployment: TimelineEntryResponse | None = None
+    supporting_evidence: list[DeploymentEvidenceResponse]
+    contradicting_evidence: list[DeploymentEvidenceResponse]
+    summary: str
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ServiceRelationshipEvidenceResponse(BaseModel):
+    signal: ServiceRelationshipSignal
+    detail: str
+    weight: float
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ScoredServiceRelationshipResponse(BaseModel):
+    kind: ServiceRelationshipKind
+    source_id: str
+    source_label: str
+    target_id: str
+    target_label: str
+    correlation_score: float
+    evidence: list[ServiceRelationshipEvidenceResponse]
+    reason: str
+    source_entry_id: str | None = None
+    target_entry_id: str | None = None
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ServiceDependencyEdgeResponse(BaseModel):
+    source_service: str
+    target_service: str
+    inferred_from: str
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ServiceCorrelationResponse(BaseModel):
+    relationships: list[ScoredServiceRelationshipResponse]
+    dependencies: list[ServiceDependencyEdgeResponse]
+    services: list[str]
+
+    model_config = ConfigDict(frozen=True)
+
+
 class TimelineResponse(BaseModel):
     incident_id: int
     project_id: int
@@ -53,6 +139,9 @@ class TimelineResponse(BaseModel):
     entries: list[TimelineEntryResponse]
     markers: TimelineMarkersResponse
     counts: dict[str, int]
+    correlations: list[TemporalCorrelationResponse]
+    deployment_correlation: DeploymentCorrelationResponse | None = None
+    service_correlation: ServiceCorrelationResponse | None = None
 
     model_config = ConfigDict(frozen=True)
 
@@ -80,6 +169,111 @@ def _markers_response(markers: TimelineMarkers) -> TimelineMarkersResponse:
         first_alert=_entry_response(markers.first_alert),
         recent_deployment=_entry_response(markers.recent_deployment),
         recovery=_entry_response(markers.recovery),
+    )
+
+
+def _correlation_response(
+    correlation: TemporalCorrelation,
+) -> TemporalCorrelationResponse:
+    source = _entry_response(correlation.source)
+    target = _entry_response(correlation.target)
+    assert source is not None
+    assert target is not None
+    return TemporalCorrelationResponse(
+        kind=correlation.kind,
+        source=source,
+        target=target,
+        time_difference=correlation.time_difference,
+        correlation_score=correlation.correlation_score,
+        reason=correlation.reason,
+    )
+
+
+def _deployment_evidence_response(
+    evidence: DeploymentEvidence,
+) -> DeploymentEvidenceResponse:
+    return DeploymentEvidenceResponse(
+        kind=evidence.kind,
+        detail=evidence.detail,
+        weight=evidence.weight,
+    )
+
+
+def _deployment_correlation_response(
+    assessment: DeploymentCorrelationAssessment | None,
+) -> DeploymentCorrelationResponse | None:
+    if assessment is None:
+        return None
+    return DeploymentCorrelationResponse(
+        is_related=assessment.is_related,
+        relationship_score=assessment.relationship_score,
+        deployment=_entry_response(assessment.deployment),
+        supporting_evidence=[
+            _deployment_evidence_response(item)
+            for item in assessment.supporting_evidence
+        ],
+        contradicting_evidence=[
+            _deployment_evidence_response(item)
+            for item in assessment.contradicting_evidence
+        ],
+        summary=assessment.summary,
+    )
+
+
+def _service_relationship_evidence_response(
+    evidence: ServiceRelationshipEvidence,
+) -> ServiceRelationshipEvidenceResponse:
+    return ServiceRelationshipEvidenceResponse(
+        signal=evidence.signal,
+        detail=evidence.detail,
+        weight=evidence.weight,
+    )
+
+
+def _scored_service_relationship_response(
+    relationship: ScoredServiceRelationship,
+) -> ScoredServiceRelationshipResponse:
+    return ScoredServiceRelationshipResponse(
+        kind=relationship.kind,
+        source_id=relationship.source_id,
+        source_label=relationship.source_label,
+        target_id=relationship.target_id,
+        target_label=relationship.target_label,
+        correlation_score=relationship.correlation_score,
+        evidence=[
+            _service_relationship_evidence_response(item)
+            for item in relationship.evidence
+        ],
+        reason=relationship.reason,
+        source_entry_id=relationship.source_entry_id,
+        target_entry_id=relationship.target_entry_id,
+    )
+
+
+def _service_dependency_response(
+    edge: ServiceDependencyEdge,
+) -> ServiceDependencyEdgeResponse:
+    return ServiceDependencyEdgeResponse(
+        source_service=edge.source_service,
+        target_service=edge.target_service,
+        inferred_from=edge.inferred_from,
+    )
+
+
+def _service_correlation_response(
+    result: ServiceCorrelationResult | None,
+) -> ServiceCorrelationResponse | None:
+    if result is None:
+        return None
+    return ServiceCorrelationResponse(
+        relationships=[
+            _scored_service_relationship_response(item)
+            for item in result.relationships
+        ],
+        dependencies=[
+            _service_dependency_response(item) for item in result.dependencies
+        ],
+        services=result.services,
     )
 
 
@@ -111,4 +305,13 @@ async def get_incident_timeline(
         ],
         markers=_markers_response(result.markers),
         counts=result.counts,
+        correlations=[
+            _correlation_response(item) for item in result.correlations
+        ],
+        deployment_correlation=_deployment_correlation_response(
+            result.deployment_correlation,
+        ),
+        service_correlation=_service_correlation_response(
+            result.service_correlation,
+        ),
     )

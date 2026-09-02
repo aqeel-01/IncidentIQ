@@ -21,6 +21,8 @@ from app.db.models import (
     Service,
     Severity,
 )
+from app.domain.correlation import CorrelationKind
+from app.domain.correlation.types import DeploymentEvidenceKind, ServiceRelationshipKind
 from app.domain.events import (
     AlertEvent,
     AlertStatus,
@@ -31,7 +33,8 @@ from app.domain.events import (
 )
 from app.domain.incidents import CreateIncidentInput, IncidentService
 from app.domain.ingestion import EventIngestionService
-from app.domain.timeline import TimelineCategory, TimelineService
+from app.domain.timeline import TimelineCategory
+from app.domain.timeline.service import TimelineService
 
 
 def _ts(minutes: int = 0) -> datetime:
@@ -227,6 +230,70 @@ async def test_timeline_identifies_key_markers(session: AsyncSession) -> None:
     assert markers.recovery is not None
     assert markers.recovery.title == "Incident resolved"
     assert markers.recovery.timestamp == _ts(25)
+
+
+@pytest.mark.asyncio
+async def test_timeline_builds_temporal_correlations(session: AsyncSession) -> None:
+    incident, event_ids = await _seed_timeline_data(session)
+
+    timeline = await TimelineService(session).build(incident.id)
+    assert timeline is not None
+
+    kinds = {item.kind for item in timeline.correlations}
+    assert CorrelationKind.DEPLOYMENT_TO_ERROR in kinds
+    assert CorrelationKind.ERROR_TO_ALERT in kinds
+
+    deployment_link = next(
+        item
+        for item in timeline.correlations
+        if item.kind is CorrelationKind.DEPLOYMENT_TO_ERROR
+    )
+    assert deployment_link.source.event_id == event_ids["DEPLOYMENT"]
+    assert deployment_link.target.error_group_id == event_ids["error_group"]
+    assert deployment_link.time_difference == timedelta(minutes=60)
+
+    alert_link = next(
+        item
+        for item in timeline.correlations
+        if item.kind is CorrelationKind.ERROR_TO_ALERT
+    )
+    assert alert_link.source.error_group_id == event_ids["error_group"]
+    assert alert_link.target.title == "HighErrorRate"
+    assert alert_link.target.metadata["normalized_data"]["status"] == "FIRING"
+    assert alert_link.time_difference == timedelta(minutes=5)
+
+
+@pytest.mark.asyncio
+async def test_timeline_builds_deployment_correlation(session: AsyncSession) -> None:
+    incident, _event_ids = await _seed_timeline_data(session)
+
+    timeline = await TimelineService(session).build(incident.id)
+    assert timeline is not None
+    assert timeline.deployment_correlation is not None
+
+    assessment = timeline.deployment_correlation
+    assert assessment.is_related is True
+    assert assessment.deployment is not None
+    assert assessment.deployment.category is TimelineCategory.DEPLOYMENT
+    assert any(
+        item.kind is DeploymentEvidenceKind.DEPLOYMENT_BEFORE_FIRST_ERROR
+        for item in assessment.supporting_evidence
+    )
+    assert "does not establish causation" in assessment.summary.lower()
+
+
+@pytest.mark.asyncio
+async def test_timeline_builds_service_correlation(session: AsyncSession) -> None:
+    incident, _event_ids = await _seed_timeline_data(session)
+
+    timeline = await TimelineService(session).build(incident.id)
+    assert timeline is not None
+    assert timeline.service_correlation is not None
+
+    result = timeline.service_correlation
+    kinds = {item.kind for item in result.relationships}
+    assert ServiceRelationshipKind.ERROR_TO_SERVICE in kinds
+    assert "payments-api" in result.services
 
 
 @pytest.mark.asyncio
