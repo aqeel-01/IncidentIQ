@@ -30,6 +30,7 @@ class Incident(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_incidents_project_status", "project_id", "status"),
         Index("ix_incidents_project_started_at", "project_id", "started_at"),
+        Index("ix_incidents_project_fingerprint", "project_id", "fingerprint"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -48,6 +49,7 @@ class Incident(TimestampMixin, Base):
 
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     environment: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     severity: Mapped[Severity] = mapped_column(
         Enum(Severity, native_enum=False, length=20),
         nullable=False,

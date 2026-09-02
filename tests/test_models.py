@@ -96,6 +96,7 @@ async def test_incident_defaults_and_enums(session: AsyncSession) -> None:
         service_id=service.id,
         title="Elevated 500s",
         environment="production",
+        fingerprint="a" * 64,
         severity=Severity.HIGH,
         started_at=_utcnow(),
     )

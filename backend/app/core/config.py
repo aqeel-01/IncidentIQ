@@ -78,12 +78,42 @@ class Settings(BaseSettings):
     error_similarity_high_confidence_min: float = Field(default=0.92, ge=0.0, le=1.0)
     error_similarity_possible_match_min: float = Field(default=0.75, ge=0.0, le=1.0)
 
+    # --- Metric anomaly detection ----------------------------------------------
+    metric_anomaly_window_size: int = Field(default=20, ge=2, le=10_000)
+    metric_anomaly_min_points: int = Field(default=5, ge=2, le=10_000)
+    metric_anomaly_z_score_threshold: float = Field(default=2.5, gt=0)
+    metric_anomaly_percentage_change_threshold: float = Field(default=50.0, ge=0)
+    metric_anomaly_percentile_low_threshold: float = Field(default=5.0, ge=0, le=100)
+    metric_anomaly_percentile_high_threshold: float = Field(default=95.0, ge=0, le=100)
+    metric_anomaly_min_stddev: float = Field(default=1e-9, gt=0)
+
     @field_validator("error_similarity_high_confidence_min")
     @classmethod
     def _high_confidence_above_possible(cls, value: float, info) -> float:
         possible = info.data.get("error_similarity_possible_match_min")
         if possible is not None and value <= possible:
             msg = "error_similarity_high_confidence_min must be > possible_match_min"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("metric_anomaly_min_points")
+    @classmethod
+    def _metric_anomaly_min_points_within_window(cls, value: int, info) -> int:
+        window = info.data.get("metric_anomaly_window_size")
+        if window is not None and value > window:
+            msg = "metric_anomaly_min_points must be <= metric_anomaly_window_size"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("metric_anomaly_percentile_high_threshold")
+    @classmethod
+    def _metric_anomaly_percentile_bounds(cls, value: float, info) -> float:
+        low = info.data.get("metric_anomaly_percentile_low_threshold")
+        if low is not None and value <= low:
+            msg = (
+                "metric_anomaly_percentile_high_threshold must be > "
+                "metric_anomaly_percentile_low_threshold"
+            )
             raise ValueError(msg)
         return value
 
