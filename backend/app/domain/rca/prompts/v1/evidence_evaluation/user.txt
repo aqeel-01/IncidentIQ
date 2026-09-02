@@ -1,0 +1,9 @@
+Evaluate the following hypotheses against the supplied evidence.
+
+Evidence package (JSON):
+{{evidence_package_json}}
+
+Hypotheses to evaluate (JSON):
+{{hypotheses_json}}
+
+For each hypothesis, identify supporting evidence, contradicting evidence, and confidence based only on the supplied data.

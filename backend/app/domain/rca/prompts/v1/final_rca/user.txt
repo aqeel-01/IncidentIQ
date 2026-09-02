@@ -1,0 +1,15 @@
+Produce the final root cause analysis from the supplied investigation data.
+
+Evidence package (JSON):
+{{evidence_package_json}}
+
+Extracted symptoms (JSON):
+{{symptoms_json}}
+
+Hypotheses (JSON):
+{{hypotheses_json}}
+
+Evidence evaluation (JSON):
+{{evaluation_json}}
+
+Synthesize a final RCA using only the supplied evidence. Admit insufficient evidence when warranted.

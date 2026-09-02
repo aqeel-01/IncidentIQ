@@ -68,6 +68,13 @@ class Settings(BaseSettings):
 
     rca_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     rca_max_tokens: int = Field(default=2048, gt=0)
+    rca_prompt_version: str = "v1"
+    rca_engine_version: str = "1.0"
+    rca_min_confidence: float = Field(default=0.6, ge=0.0, le=1.0)
+    rca_confident_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    rca_min_evidence_quality: int = Field(default=30, ge=0, le=100)
+    ollama_timeout_seconds: float = Field(default=60.0, gt=0)
+    groq_timeout_seconds: float = Field(default=60.0, gt=0)
 
     # --- Log uploads ---------------------------------------------------------
     log_upload_dir: str = "data/uploads"

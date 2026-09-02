@@ -1,0 +1,233 @@
+{
+  "anomalies": [
+    {
+      "id": "event:2",
+      "metric_name": "error_rate",
+      "timestamp": "2026-09-01T11:50:00Z",
+      "title": "error_rate",
+      "value": 0.9
+    }
+  ],
+  "correlations": [
+    {
+      "kind": "deployment_correlation",
+      "reason": "Possible deployment association",
+      "score": 0.7,
+      "source": "v1.2.2",
+      "target": "incident",
+      "time_difference_seconds": null
+    },
+    {
+      "kind": "deployment_to_error",
+      "reason": "Deployment preceded error",
+      "score": 0.75,
+      "source": "v1.2.2",
+      "target": "database timeout",
+      "time_difference_seconds": 1800
+    },
+    {
+      "kind": "error_to_service",
+      "reason": "Error attributed to payments-api",
+      "score": 0.8,
+      "source": "database timeout",
+      "target": "payments-api",
+      "time_difference_seconds": null
+    },
+    {
+      "kind": "metric_anomaly_to_error",
+      "reason": "Metric anomaly preceded error",
+      "score": 0.85,
+      "source": "error_rate",
+      "target": "database timeout",
+      "time_difference_seconds": 600
+    }
+  ],
+  "deployments": [
+    {
+      "id": "event:1",
+      "service": "payments-api",
+      "timestamp": "2026-09-01T11:30:00Z",
+      "title": "v1.2.2",
+      "version": "v1.2.2"
+    }
+  ],
+  "error_groups": [
+    {
+      "error_group_id": null,
+      "first_seen": "2026-09-01T12:00:00Z",
+      "id": "error_group:1",
+      "occurrence_count": 12,
+      "service": "payments-api",
+      "severity": null,
+      "title": "database timeout"
+    }
+  ],
+  "evidence_graph": {
+    "chain": [
+      "node:deployment",
+      "node:metric-anomaly",
+      "node:error-increase",
+      "node:service-failure",
+      "node:incident"
+    ],
+    "edges": [
+      {
+        "confidence": 0.75,
+        "kind": "escalated_to",
+        "reason": "Deployment preceded error",
+        "source_id": "node:deployment",
+        "target_id": "node:error-increase"
+      },
+      {
+        "confidence": 0.9167,
+        "kind": "leads_to",
+        "reason": "Deployment: v1.2.2 temporally precedes Metric anomaly: error_rate in the incident evidence chain",
+        "source_id": "node:deployment",
+        "target_id": "node:metric-anomaly"
+      },
+      {
+        "confidence": 0.8,
+        "kind": "correlates_with",
+        "reason": "Error attributed to payments-api",
+        "source_id": "node:error-increase",
+        "target_id": "node:error-increase"
+      },
+      {
+        "confidence": 0.95,
+        "kind": "leads_to",
+        "reason": "Error increase: database timeout temporally precedes Service failure: payments-api in the incident evidence chain",
+        "source_id": "node:error-increase",
+        "target_id": "node:service-failure"
+      },
+      {
+        "confidence": 0.85,
+        "kind": "leads_to",
+        "reason": "Metric anomaly: error_rate temporally precedes Error increase: database timeout in the incident evidence chain",
+        "source_id": "node:metric-anomaly",
+        "target_id": "node:error-increase"
+      },
+      {
+        "confidence": 0.95,
+        "kind": "leads_to",
+        "reason": "Service failure: payments-api temporally precedes Incident 42 in the incident evidence chain",
+        "source_id": "node:service-failure",
+        "target_id": "node:incident"
+      }
+    ],
+    "nodes": [
+      {
+        "confidence": 0.7,
+        "id": "node:deployment",
+        "kind": "deployment",
+        "label": "Deployment: v1.2.2",
+        "timestamp": "2026-09-01T11:30:00Z"
+      },
+      {
+        "confidence": 0.85,
+        "id": "node:error-increase",
+        "kind": "error_increase",
+        "label": "Error increase: database timeout",
+        "timestamp": "2026-09-01T12:00:00Z"
+      },
+      {
+        "confidence": 1.0,
+        "id": "node:incident",
+        "kind": "incident",
+        "label": "Incident 42",
+        "timestamp": "2026-09-01T12:00:00Z"
+      },
+      {
+        "confidence": 0.8,
+        "id": "node:metric-anomaly",
+        "kind": "metric_anomaly",
+        "label": "Metric anomaly: error_rate",
+        "timestamp": "2026-09-01T11:50:00Z"
+      },
+      {
+        "confidence": 0.8,
+        "id": "node:service-failure",
+        "kind": "service_failure",
+        "label": "Service failure: payments-api",
+        "timestamp": "2026-09-01T12:00:00Z"
+      }
+    ],
+    "summary": "Evidence chain: node:deployment -> node:metric-anomaly -> node:error-increase -> node:service-failure -> node:incident"
+  },
+  "evidence_quality": {
+    "completeness": 85.0,
+    "consistency": 100.0,
+    "correlation_strength": 84.63,
+    "score": 94,
+    "source_diversity": 100.0,
+    "summary": "High evidence quality (94/100); weakest dimension: correlation strength (85)",
+    "temporal_consistency": 100.0
+  },
+  "historical_context": null,
+  "incident": {
+    "ended_at": null,
+    "environment": "production",
+    "incident_id": 42,
+    "occurrence_count": 3,
+    "project_id": 7,
+    "service": "payments-api",
+    "severity": "high",
+    "started_at": "2026-09-01T12:00:00Z",
+    "status": "open",
+    "title": "Checkout failures"
+  },
+  "symptoms": [
+    {
+      "id": "event:4",
+      "kind": "log",
+      "service": "payments-api",
+      "severity": null,
+      "timestamp": "2026-09-01T12:01:00Z",
+      "title": "connection timeout talking to database"
+    },
+    {
+      "id": "event:3",
+      "kind": "alert",
+      "service": "payments-api",
+      "severity": null,
+      "timestamp": "2026-09-01T12:05:00Z",
+      "title": "HighErrorRate"
+    }
+  ],
+  "timeline": [
+    {
+      "category": "deployment",
+      "id": "event:1",
+      "severity": null,
+      "timestamp": "2026-09-01T11:30:00Z",
+      "title": "v1.2.2"
+    },
+    {
+      "category": "metric",
+      "id": "event:2",
+      "severity": null,
+      "timestamp": "2026-09-01T11:50:00Z",
+      "title": "error_rate"
+    },
+    {
+      "category": "error",
+      "id": "error_group:1",
+      "severity": null,
+      "timestamp": "2026-09-01T12:00:00Z",
+      "title": "database timeout"
+    },
+    {
+      "category": "log",
+      "id": "event:4",
+      "severity": null,
+      "timestamp": "2026-09-01T12:01:00Z",
+      "title": "connection timeout talking to database"
+    },
+    {
+      "category": "alert",
+      "id": "event:3",
+      "severity": null,
+      "timestamp": "2026-09-01T12:05:00Z",
+      "title": "HighErrorRate"
+    }
+  ]
+}

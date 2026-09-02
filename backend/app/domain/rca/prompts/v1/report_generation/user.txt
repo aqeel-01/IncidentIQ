@@ -1,0 +1,9 @@
+Generate a human-readable incident RCA report from the supplied data.
+
+Evidence package (JSON):
+{{evidence_package_json}}
+
+Final RCA result (JSON):
+{{rca_result_json}}
+
+Write a clear report that uses only the supplied evidence and RCA result. Distinguish facts from hypotheses.

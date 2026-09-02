@@ -1,0 +1,9 @@
+Generate ranked root cause hypotheses from the supplied evidence.
+
+Evidence package (JSON):
+{{evidence_package_json}}
+
+Extracted symptoms (JSON):
+{{symptoms_json}}
+
+Propose hypotheses supported only by the evidence above. Rank them by plausibility.

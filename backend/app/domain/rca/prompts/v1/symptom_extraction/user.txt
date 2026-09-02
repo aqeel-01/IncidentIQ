@@ -1,0 +1,6 @@
+Extract observable symptoms from the following RCA evidence package.
+
+Evidence package (JSON):
+{{evidence_package_json}}
+
+Return structured symptoms derived only from this evidence.
