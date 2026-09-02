@@ -22,6 +22,7 @@ dependencies = [
     "asyncmy>=0.2",
     "alembic>=1.13",
     "httpx>=0.27",
+    "celery>=5.4",
 ]
 
 [project.optional-dependencies]

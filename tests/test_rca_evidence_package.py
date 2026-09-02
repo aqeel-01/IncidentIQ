@@ -21,6 +21,7 @@ from app.domain.evidence import build_evidence_group
 from app.domain.rca import (
     RCAHistoricalContext,
     RCAIncidentContext,
+    SimilarIncidentContext,
     build_rca_evidence_package,
     package_to_canonical_json,
 )
@@ -243,6 +244,20 @@ def test_build_rca_evidence_package_includes_required_sections() -> None:
         historical_context=RCAHistoricalContext(
             prior_incident_count=2,
             related_incident_ids=[11, 19],
+            similar_incidents=[
+                SimilarIncidentContext(
+                    incident_id=11,
+                    title="Prior checkout outage",
+                    similarity_score=0.82,
+                    environment="production",
+                    service="payments-api",
+                    status="IDENTIFIED",
+                    started_at=_ts(),
+                    primary_hypothesis_title="Deployment regression",
+                    matching_signals=["title", "service"],
+                    context_only=True,
+                )
+            ],
             notes=["Similar checkout outage last week"],
         ),
     )
@@ -258,6 +273,7 @@ def test_build_rca_evidence_package_includes_required_sections() -> None:
     assert package.evidence_quality is not None
     assert package.historical_context is not None
     assert package.historical_context.related_incident_ids == [11, 19]
+    assert package.historical_context.similar_incidents[0].context_only is True
 
 
 def test_build_rca_evidence_package_snapshot() -> None:

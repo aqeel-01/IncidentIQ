@@ -21,6 +21,7 @@ from app.domain.rca.package import (
     RCAIncidentContext,
     RCASymptom,
     RCATimelineItem,
+    SimilarIncidentContext,
 )
 from app.domain.rca.prompts import (
     RCAPromptBundle,
@@ -31,10 +32,12 @@ from app.domain.rca.prompts import (
     prompt_context_from_values,
     render_rca_prompt,
 )
+from app.domain.rca.service import RCAService
 from app.domain.rca.types import (
     ContradictingEvidence,
     EvaluatedHypothesis,
     ExtractedSymptom,
+    HistoricalRCARecord,
     Hypothesis,
     RCAHypothesisEvaluationResult,
     RCAHypothesisSet,
@@ -49,6 +52,7 @@ __all__ = [
     "ContradictingEvidence",
     "EvaluatedHypothesis",
     "ExtractedSymptom",
+    "HistoricalRCARecord",
     "Hypothesis",
     "RCAAnomalySummary",
     "RCACorrelationSummary",
@@ -66,12 +70,14 @@ __all__ = [
     "RCAHypothesisEvaluationResult",
     "RCAHypothesisSet",
     "RCAIncidentContext",
+    "SimilarIncidentContext",
     "RCAPromptBundle",
     "RCAPromptContext",
     "RCAPromptError",
     "RCAPromptStage",
     "RCAResult",
     "RCAStatus",
+    "RCAService",
     "RCASymptom",
     "RCASymptomAnalysisResult",
     "RCATimelineItem",

@@ -9,6 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import InvestigationDispatcherDep
+from app.api.routes.investigations import (
+    InvestigationResponse,
+    to_investigation_response,
+)
 from app.db.models.enums import IncidentStatus, Severity
 from app.db.session import get_db
 from app.domain.incidents import (
@@ -19,6 +24,7 @@ from app.domain.incidents import (
     IncidentService,
     IncidentValidationError,
 )
+from app.domain.investigation import InvestigationJobService
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
 
@@ -107,6 +113,29 @@ async def create_incident(
         ) from exc
 
     return _to_create_response(result)
+
+
+@router.post(
+    "/{incident_id}/investigate",
+    response_model=InvestigationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def investigate_incident(
+    incident_id: int,
+    session: SessionDep,
+    dispatcher: InvestigationDispatcherDep,
+) -> InvestigationResponse:
+    service = InvestigationJobService(session, dispatcher=dispatcher)
+    try:
+        snapshot = await service.submit_for_incident(incident_id)
+        await session.commit()
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return to_investigation_response(snapshot)
 
 
 @router.get("", response_model=IncidentListResponse)

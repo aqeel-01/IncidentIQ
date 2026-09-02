@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://incidentiq:incidentiq@localhost:5432/incidentiq"
     redis_url: str = "redis://localhost:6379/0"
 
+    # --- Background workers --------------------------------------------------
+    celery_broker_url: str | None = None
+    celery_result_backend: str | None = None
+    celery_default_queue: str = "investigation"
+    celery_task_max_retries: int = Field(default=3, ge=0, le=20)
+    celery_task_retry_backoff_seconds: int = Field(default=60, ge=1, le=3600)
+    celery_task_retry_backoff_max_seconds: int = Field(default=600, ge=1, le=86400)
+
     # Optional services: unset by default so the app remains usable without them.
     opensearch_url: str | None = None
     prometheus_url: str | None = None
@@ -84,6 +92,10 @@ class Settings(BaseSettings):
     # --- Error-group similarity ------------------------------------------------
     error_similarity_high_confidence_min: float = Field(default=0.92, ge=0.0, le=1.0)
     error_similarity_possible_match_min: float = Field(default=0.75, ge=0.0, le=1.0)
+
+    # --- Similar incident retrieval --------------------------------------------
+    incident_similarity_min_score: float = Field(default=0.55, ge=0.0, le=1.0)
+    incident_similarity_max_results: int = Field(default=5, ge=1, le=50)
 
     # --- Metric anomaly detection ----------------------------------------------
     metric_anomaly_window_size: int = Field(default=20, ge=2, le=10_000)
@@ -173,6 +185,14 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def resolved_celery_broker_url(self) -> str:
+        return self.celery_broker_url or self.redis_url
+
+    @property
+    def resolved_celery_result_backend(self) -> str:
+        return self.celery_result_backend or self.redis_url
 
 
 @lru_cache(maxsize=1)

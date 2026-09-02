@@ -149,6 +149,23 @@ class RCAEvidenceQualitySummary(BaseModel):
     consistency: float = Field(ge=0.0, le=100.0)
 
 
+class SimilarIncidentContext(BaseModel):
+    """A scored similar historical incident included as context only."""
+
+    model_config = ConfigDict(frozen=True)
+
+    incident_id: int
+    title: str
+    similarity_score: float = Field(ge=0.0, le=1.0)
+    environment: str
+    service: str | None = None
+    status: str
+    started_at: datetime
+    primary_hypothesis_title: str | None = None
+    matching_signals: list[str] = Field(default_factory=list)
+    context_only: bool = True
+
+
 class RCAHistoricalContext(BaseModel):
     """Optional historical incident context."""
 
@@ -156,6 +173,7 @@ class RCAHistoricalContext(BaseModel):
 
     prior_incident_count: int = Field(default=0, ge=0)
     related_incident_ids: list[int] = Field(default_factory=list)
+    similar_incidents: list[SimilarIncidentContext] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
 
 

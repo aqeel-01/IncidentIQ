@@ -41,6 +41,8 @@ class RCAEngineResult(BaseModel):
     result: RCAResult
     engine_version: str
     prompt_version: str
+    ai_provider: str
+    ai_model: str
     symptom_analysis: RCASymptomAnalysisResult | None = None
     hypothesis_set: RCAHypothesisSet | None = None
     hypothesis_evaluation: RCAHypothesisEvaluationResult | None = None
@@ -63,10 +65,10 @@ class RCAEngine:
         _assert_no_raw_logs(evidence_package_json)
 
         if _is_evidence_insufficient(package, self._config):
-            return RCAEngineResult(
+            return _engine_result(
+                provider,
+                config=self._config,
                 result=_insufficient_evidence_result(package),
-                engine_version=self._config.engine_version,
-                prompt_version=self._config.prompt_version,
             )
 
         symptom_analysis = await self._run_stage(
@@ -89,10 +91,10 @@ class RCAEngine:
             response_model=RCAHypothesisSet,
         )
         if not hypothesis_set.hypotheses:
-            return RCAEngineResult(
+            return _engine_result(
+                provider,
+                config=self._config,
                 result=_insufficient_evidence_result(package),
-                engine_version=self._config.engine_version,
-                prompt_version=self._config.prompt_version,
                 symptom_analysis=symptom_analysis,
                 hypothesis_set=hypothesis_set,
             )
@@ -132,10 +134,10 @@ class RCAEngine:
             hypothesis_evaluation=hypothesis_evaluation,
         )
 
-        return RCAEngineResult(
+        return _engine_result(
+            provider,
+            config=self._config,
             result=result,
-            engine_version=self._config.engine_version,
-            prompt_version=self._config.prompt_version,
             symptom_analysis=symptom_analysis,
             hypothesis_set=hypothesis_set,
             hypothesis_evaluation=hypothesis_evaluation,
@@ -199,6 +201,27 @@ def _is_evidence_insufficient(
         )
     )
     return not has_signals
+
+
+def _engine_result(
+    provider: AIProvider,
+    *,
+    config: RCAEngineConfig,
+    result: RCAResult,
+    symptom_analysis: RCASymptomAnalysisResult | None = None,
+    hypothesis_set: RCAHypothesisSet | None = None,
+    hypothesis_evaluation: RCAHypothesisEvaluationResult | None = None,
+) -> RCAEngineResult:
+    return RCAEngineResult(
+        result=result,
+        engine_version=config.engine_version,
+        prompt_version=config.prompt_version,
+        ai_provider=provider.name.value,
+        ai_model=provider.model,
+        symptom_analysis=symptom_analysis,
+        hypothesis_set=hypothesis_set,
+        hypothesis_evaluation=hypothesis_evaluation,
+    )
 
 
 def _insufficient_evidence_result(package: RCAEvidencePackage) -> RCAResult:

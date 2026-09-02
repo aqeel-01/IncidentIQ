@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -148,3 +149,25 @@ class RCAResult(BaseModel):
             raise ValueError(msg)
 
         return self
+
+
+class HistoricalRCARecord(BaseModel):
+    """Persisted RCA output with investigation traceability metadata."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    project_id: int
+    incident_id: int
+    investigation_job_id: str | None
+    evidence_group_id: int | None
+    status: RCAStatus
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence_quality: int = Field(ge=0, le=100)
+    ai_provider: str
+    ai_model: str
+    engine_version: str
+    prompt_version: str
+    result: RCAResult
+    created_at: datetime
+    updated_at: datetime

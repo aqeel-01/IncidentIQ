@@ -45,5 +45,20 @@ services:
       timeout: 3s
       retries: 5
 
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker --loglevel=info -Q investigation
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql://incidentiq:incidentiq@postgres:5432/incidentiq
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   pgdata:
