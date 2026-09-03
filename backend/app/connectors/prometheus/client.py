@@ -9,6 +9,7 @@ import httpx
 from app.connectors.errors import ConnectorConnectionError
 from app.connectors.prometheus.config import PrometheusConnectorConfig
 from app.connectors.prometheus.errors import PrometheusTimeoutError
+from app.core.security import sanitize_error_message
 
 
 class PrometheusHTTPClient(Protocol):
@@ -60,7 +61,7 @@ class HttpxPrometheusClient:
             )
             raise PrometheusTimeoutError(msg) from exc
         except httpx.HTTPError as exc:
-            msg = f"prometheus request failed: {exc}"
+            msg = sanitize_error_message(f"prometheus request failed: {exc}")
             raise ConnectorConnectionError(msg) from exc
 
         payload = response.json()

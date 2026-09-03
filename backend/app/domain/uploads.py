@@ -14,6 +14,15 @@ from app.db.models.log_upload import LogUpload, LogUploadStatus
 from app.db.models.project import Project
 
 ALLOWED_EXTENSIONS = frozenset({".log", ".txt", ".json", ".jsonl", ".csv"})
+ALLOWED_CONTENT_TYPES = frozenset(
+    {
+        "text/plain",
+        "text/csv",
+        "application/json",
+        "application/x-ndjson",
+        "application/octet-stream",
+    }
+)
 
 
 class UploadValidationError(ValueError):
@@ -45,6 +54,44 @@ def validate_upload_filename(filename: str | None) -> tuple[str, str]:
         raise UploadValidationError(f"unsupported file type: {suffix or '(none)'}")
 
     return basename, suffix
+
+
+def validate_upload_content_type(content_type: str | None) -> str | None:
+    """Reject unexpected Content-Type values when a client supplies one."""
+
+    if content_type is None or not content_type.strip():
+        return None
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    if media_type not in ALLOWED_CONTENT_TYPES:
+        raise UploadValidationError(f"unsupported content type: {media_type}")
+    return media_type
+
+
+def resolve_upload_destination(
+    upload_root: str | Path,
+    project_id: int,
+    stored_filename: str,
+) -> Path:
+    """Build a destination path and ensure it stays under the upload root."""
+
+    if (
+        not stored_filename
+        or stored_filename in {".", ".."}
+        or "/" in stored_filename
+        or "\\" in stored_filename
+        or Path(stored_filename).name != stored_filename
+    ):
+        msg = "invalid stored filename"
+        raise UploadValidationError(msg)
+
+    root = Path(upload_root).expanduser().resolve(strict=False)
+    destination = (root / str(project_id) / stored_filename).resolve(strict=False)
+    try:
+        destination.relative_to(root)
+    except ValueError as exc:
+        msg = "upload destination escapes upload root"
+        raise UploadValidationError(msg) from exc
+    return destination
 
 
 async def stream_save_upload(
@@ -95,10 +142,13 @@ class LogUploadService:
             raise LookupError(f"project {project_id} not found")
 
         original_filename, extension = validate_upload_filename(upload.filename)
+        content_type = validate_upload_content_type(upload.content_type)
         job_id = str(uuid.uuid4())
         stored_filename = f"{job_id}{extension}"
-        destination = (
-            Path(self._settings.log_upload_dir) / str(project_id) / stored_filename
+        destination = resolve_upload_destination(
+            self._settings.log_upload_dir,
+            project_id,
+            stored_filename,
         )
 
         size = await stream_save_upload(
@@ -114,7 +164,7 @@ class LogUploadService:
             original_filename=original_filename,
             stored_filename=stored_filename,
             file_extension=extension,
-            content_type=upload.content_type,
+            content_type=content_type,
             file_size_bytes=size,
             status=LogUploadStatus.QUEUED,
         )

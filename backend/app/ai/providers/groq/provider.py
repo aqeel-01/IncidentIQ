@@ -25,6 +25,7 @@ from app.ai.types import (
     StructuredGenerateResponse,
 )
 from app.core.config import Settings
+from app.core.metrics import track_ai_request
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -50,21 +51,22 @@ class GroqProvider(AIProvider):
         return self._config.model
 
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
-        messages = _build_messages(request.prompt, request.system_prompt)
-        payload = await self._client.chat_completions(
-            model=self.model,
-            messages=messages,
-            temperature=_resolve_temperature(request.temperature, self._config),
-            max_tokens=_resolve_max_tokens(request.max_tokens, self._config),
-        )
-        content, finish_reason, usage, model = _parse_chat_response(payload)
-        return GenerateResponse(
-            content=content,
-            provider=self.name,
-            model=model,
-            finish_reason=finish_reason,
-            usage=usage,
-        )
+        async with track_ai_request(self.name.value):
+            messages = _build_messages(request.prompt, request.system_prompt)
+            payload = await self._client.chat_completions(
+                model=self.model,
+                messages=messages,
+                temperature=_resolve_temperature(request.temperature, self._config),
+                max_tokens=_resolve_max_tokens(request.max_tokens, self._config),
+            )
+            content, finish_reason, usage, model = _parse_chat_response(payload)
+            return GenerateResponse(
+                content=content,
+                provider=self.name,
+                model=model,
+                finish_reason=finish_reason,
+                usage=usage,
+            )
 
     async def structured_generate(
         self,
@@ -72,31 +74,32 @@ class GroqProvider(AIProvider):
         *,
         response_model: type[T],
     ) -> StructuredGenerateResponse:
-        prompt = build_structured_prompt(
-            request.prompt,
-            response_model=response_model,
-        )
-        messages = _build_messages(prompt, request.system_prompt)
-        payload = await self._client.chat_completions(
-            model=self.model,
-            messages=messages,
-            temperature=_resolve_temperature(request.temperature, self._config),
-            max_tokens=_resolve_max_tokens(request.max_tokens, self._config),
-            response_format={"type": "json_object"},
-        )
-        content, finish_reason, usage, model = _parse_chat_response(payload)
-        validated = validate_structured_output(
-            extract_json_object(content),
-            response_model=response_model,
-        )
-        return StructuredGenerateResponse(
-            data=validated,
-            raw_content=content,
-            provider=self.name,
-            model=model,
-            finish_reason=finish_reason,
-            usage=usage,
-        )
+        async with track_ai_request(self.name.value):
+            prompt = build_structured_prompt(
+                request.prompt,
+                response_model=response_model,
+            )
+            messages = _build_messages(prompt, request.system_prompt)
+            payload = await self._client.chat_completions(
+                model=self.model,
+                messages=messages,
+                temperature=_resolve_temperature(request.temperature, self._config),
+                max_tokens=_resolve_max_tokens(request.max_tokens, self._config),
+                response_format={"type": "json_object"},
+            )
+            content, finish_reason, usage, model = _parse_chat_response(payload)
+            validated = validate_structured_output(
+                extract_json_object(content),
+                response_model=response_model,
+            )
+            return StructuredGenerateResponse(
+                data=validated,
+                raw_content=content,
+                provider=self.name,
+                model=model,
+                finish_reason=finish_reason,
+                usage=usage,
+            )
 
     async def health_check(self) -> AIProviderHealthResult:
         try:

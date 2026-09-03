@@ -1,0 +1,28 @@
+# Alertmanager for the `full` Docker Compose profile.
+# Webhook delivery to IncidentIQ requires a Bearer token after Step 51 auth.
+# After bootstrapping an ENGINEER/ADMIN user, set `credentials` below to a JWT
+# from POST /api/v1/auth/login (or leave commented for a dry-run stack).
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: incidentiq
+  group_by:
+    - alertname
+    - service
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 2h
+
+receivers:
+  - name: incidentiq
+    webhook_configs:
+      - url: http://api:8000/api/v1/alerts/prometheus?project_id=1
+        send_resolved: true
+        # http_config:
+        #   authorization:
+        #     type: Bearer
+        #     credentials: REPLACE_WITH_JWT_ACCESS_TOKEN
+
+inhibit_rules: []

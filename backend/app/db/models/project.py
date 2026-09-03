@@ -11,11 +11,13 @@ from app.db.base import Base
 from app.db.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.db.models.configured_connector import ConfiguredConnector
     from app.db.models.error_group import ErrorGroup
     from app.db.models.event import Event
     from app.db.models.incident import Incident
     from app.db.models.log_upload import LogUpload
     from app.db.models.organization import Organization
+    from app.db.models.project_membership import ProjectMembership
     from app.db.models.service import Service
 
 
@@ -35,6 +37,11 @@ class Project(TimestampMixin, Base):
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
 
     organization: Mapped[Organization] = relationship(back_populates="projects")
+    memberships: Mapped[list[ProjectMembership]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     services: Mapped[list[Service]] = relationship(
         back_populates="project", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -48,5 +55,8 @@ class Project(TimestampMixin, Base):
         back_populates="project", cascade="all, delete-orphan", passive_deletes=True
     )
     log_uploads: Mapped[list[LogUpload]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", passive_deletes=True
+    )
+    connectors: Mapped[list[ConfiguredConnector]] = relationship(
         back_populates="project", cascade="all, delete-orphan", passive_deletes=True
     )

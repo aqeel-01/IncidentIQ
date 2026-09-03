@@ -56,3 +56,11 @@ class EvidenceRelationKind(enum.StrEnum):
     CORRELATES_WITH = "correlates_with"
     CAUSED_BY = "caused_by"
     RELATED_TO = "related_to"
+
+
+class ProjectRole(enum.StrEnum):
+    """Project-scoped RBAC roles (least → most privileged)."""
+
+    VIEWER = "VIEWER"
+    ENGINEER = "ENGINEER"
+    ADMIN = "ADMIN"

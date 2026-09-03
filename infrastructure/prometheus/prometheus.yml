@@ -1,0 +1,26 @@
+# Global scrape config for the `full` Docker Compose profile.
+# IncidentIQ exposes Prometheus metrics at GET /metrics (no auth).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+rule_files: []
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090
+
+  - job_name: incidentiq
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api:8000

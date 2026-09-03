@@ -2,11 +2,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 
+import { fetchCurrentUser, toAuthUser } from "@/api/auth";
+import { isUnauthorized } from "@/api/errors";
 import {
   clearAccessToken,
   getAccessToken,
@@ -19,58 +22,69 @@ type AuthContextValue = {
   user: AuthUser | null;
   accessToken: string | null;
   isAuthenticated: boolean;
-  /**
-   * Placeholder sign-in until backend auth lands.
-   * Stores a session token so the API client can attach Authorization headers.
-   */
   signIn: (session: AuthSession) => void;
   signOut: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function readInitialSession(): AuthSession | null {
-  const token = getAccessToken();
-  if (!token) {
-    return null;
-  }
-
-  // Auth is not implemented on the backend yet. Keep a lightweight local
-  // session so protected routes and the API client stay auth-ready.
-  return {
-    accessToken: token,
-    user: {
-      id: "local-dev",
-      email: "dev@incidentiq.local",
-      displayName: "Local Developer",
-    },
-  };
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<AuthSession | null>(readInitialSession);
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [status, setStatus] = useState<AuthStatus>("loading");
 
   const signIn = useCallback((next: AuthSession) => {
     setAccessToken(next.accessToken);
     setSession(next);
+    setStatus("authenticated");
   }, []);
 
   const signOut = useCallback(() => {
     clearAccessToken();
     setSession(null);
+    setStatus("anonymous");
   }, []);
 
-  const value = useMemo<AuthContextValue>(() => {
-    const status: AuthStatus = session ? "authenticated" : "anonymous";
-    return {
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) {
+      setStatus("anonymous");
+      return;
+    }
+
+    const controller = new AbortController();
+    fetchCurrentUser(controller.signal)
+      .then((payload) => {
+        setSession({
+          accessToken: token,
+          user: toAuthUser(payload),
+        });
+        setStatus("authenticated");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        if (isUnauthorized(error)) {
+          clearAccessToken();
+        }
+        setSession(null);
+        setStatus("anonymous");
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
       status,
       user: session?.user ?? null,
       accessToken: session?.accessToken ?? null,
       isAuthenticated: status === "authenticated",
       signIn,
       signOut,
-    };
-  }, [session, signIn, signOut]);
+    }),
+    [session, signIn, signOut, status],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

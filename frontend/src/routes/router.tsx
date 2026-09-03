@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { RequireAuth } from "@/auth/RequireAuth";
 import { AppShell } from "@/components/layout/AppShell";
+import { ConnectorsPage } from "@/pages/ConnectorsPage";
 import { IncidentDetailPage } from "@/pages/IncidentDetailPage";
 import { IncidentsPage } from "@/pages/IncidentsPage";
 import { LoginPage } from "@/pages/LoginPage";
@@ -40,6 +41,16 @@ export function AppRouter() {
           <RequireAuth>
             <AppShell>
               <IncidentDetailPage />
+            </AppShell>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path={paths.connectors}
+        element={
+          <RequireAuth>
+            <AppShell>
+              <ConnectorsPage />
             </AppShell>
           </RequireAuth>
         }

@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import CurrentUserDep, SettingsDep, require_project_role
+from app.db.models.enums import ProjectRole
 from app.db.session import get_db
 from app.domain.alertmanager import (
     AlertmanagerWebhookError,
@@ -44,9 +46,27 @@ class AlertmanagerWebhookResponse(BaseModel):
 async def prometheus_alertmanager_webhook(
     payload: AlertmanagerWebhookPayload,
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
     project_id: Annotated[int, Query(description="Project that owns ingested alerts")],
 ) -> AlertmanagerWebhookResponse:
     """Accept an Alertmanager webhook and create or update incidents."""
+
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=project_id,
+        minimum_role=ProjectRole.ENGINEER,
+    )
+    if len(payload.alerts) > settings.alertmanager_max_alerts_per_webhook:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "too many alerts in webhook; max "
+                f"{settings.alertmanager_max_alerts_per_webhook}"
+            ),
+        )
 
     service = AlertmanagerWebhookService(session)
     try:

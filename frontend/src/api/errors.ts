@@ -24,6 +24,10 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
 }
 
+export function isUnauthorized(error: unknown): boolean {
+  return isApiError(error) && error.isUnauthorized;
+}
+
 export function getErrorMessage(error: unknown, fallback = "Something went wrong"): string {
   if (isApiError(error)) {
     return error.detail || fallback;

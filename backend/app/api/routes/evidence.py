@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import CurrentUserDep, SettingsDep, require_project_role
+from app.db.models.enums import ProjectRole
 from app.db.session import get_db
 from app.domain.evidence import EvidenceService
 from app.domain.evidence.types import (
@@ -241,9 +243,18 @@ def _evidence_group_response(group: EvidenceGroup) -> EvidenceGroupResponse:
 async def get_incident_evidence(
     incident_id: int,
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
 ) -> EvidenceGroupResponse:
     existing = await EvidenceService(session).get_latest_for_incident(incident_id)
     if existing is not None:
+        await require_project_role(
+            session=session,
+            settings=settings,
+            user=user,
+            project_id=existing.project_id,
+            minimum_role=ProjectRole.VIEWER,
+        )
         return _evidence_group_response(existing)
 
     timeline = await TimelineService(session).build(incident_id)
@@ -252,6 +263,13 @@ async def get_incident_evidence(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"incident {incident_id} not found",
         )
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=timeline.project_id,
+        minimum_role=ProjectRole.VIEWER,
+    )
     if timeline.evidence_group is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.middleware import MetricsMiddleware, RateLimitMiddleware
 from app.api.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -39,6 +40,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         summary="AI-powered production incident investigation and RCA platform.",
         lifespan=lifespan,
     )
+    app.state.settings = settings
+
+    # Middleware runs in reverse registration order on the request path.
+    app.add_middleware(RateLimitMiddleware, settings=settings)
+    app.add_middleware(MetricsMiddleware)
 
     origins = settings.cors_origin_list
     if origins:

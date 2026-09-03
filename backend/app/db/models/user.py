@@ -12,6 +12,7 @@ from app.db.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from app.db.models.organization import Organization
+    from app.db.models.project_membership import ProjectMembership
 
 
 class User(TimestampMixin, Base):
@@ -31,3 +32,8 @@ class User(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     organization: Mapped[Organization] = relationship(back_populates="users")
+    memberships: Mapped[list[ProjectMembership]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

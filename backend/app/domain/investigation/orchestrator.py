@@ -15,6 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai import create_ai_model_router
 from app.ai.provider import AIProvider
 from app.core.config import Settings
+from app.core.metrics import (
+    observe_investigation_finished,
+    observe_rca_failure,
+)
 from app.db.models.enums import EventType, IncidentStatus
 from app.db.models.event import Event
 from app.db.models.incident import Incident
@@ -501,13 +505,29 @@ class InvestigationOrchestrator:
         job.completed_at = datetime.now(UTC)
         job.error_message = None
         await self._session.flush()
+        observe_investigation_finished(
+            status="completed",
+            started_at=job.started_at,
+            completed_at=job.completed_at,
+        )
 
     async def _mark_failed(self, job: InvestigationJob, *, error: str) -> None:
+        failed_stage = job.stage
         job.status = InvestigationJobStatus.FAILED
         job.stage = InvestigationStage.FAILED
         job.error_message = error
         job.completed_at = datetime.now(UTC)
         await self._session.flush()
+        observe_investigation_finished(
+            status="failed",
+            started_at=job.started_at,
+            completed_at=job.completed_at,
+        )
+        if failed_stage in {
+            InvestigationStage.RUN_RCA,
+            InvestigationStage.PERSIST_RCA,
+        }:
+            observe_rca_failure(failed_stage.value)
 
     async def _load_job(self, job_id: str) -> InvestigationJob | None:
         result = await self._session.execute(

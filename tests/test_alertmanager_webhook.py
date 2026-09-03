@@ -17,11 +17,11 @@ from app.db.base import Base
 from app.db.models import (
     Incident,
     IncidentStatus,
-    Organization,
     Project,
     Service,
     Severity,
 )
+from app.db.models.enums import ProjectRole
 from app.db.session import get_db
 from app.domain.alertmanager import (
     AlertmanagerWebhookPayload,
@@ -29,6 +29,7 @@ from app.domain.alertmanager import (
 )
 from app.domain.events import AlertStatus
 from app.main import create_app
+from tests.auth_support import create_principal, grant_role, install_current_user
 
 
 def _ts() -> str:
@@ -121,7 +122,9 @@ async def db_session(alert_settings: Settings) -> AsyncIterator[AsyncSession]:
 
 @pytest.fixture
 def api_client(
-    alert_settings: Settings, db_session: AsyncSession
+    alert_settings: Settings,
+    db_session: AsyncSession,
+    principal,
 ) -> Iterator[TestClient]:
     app = create_app(settings=alert_settings)
     app.dependency_overrides[get_settings] = lambda: alert_settings
@@ -130,6 +133,7 @@ def api_client(
         yield db_session
 
     app.dependency_overrides[get_db] = _override_db
+    install_current_user(app, principal)
 
     with TestClient(app) as client:
         yield client
@@ -138,13 +142,24 @@ def api_client(
 
 
 @pytest_asyncio.fixture
+async def principal(db_session: AsyncSession):
+    return await create_principal(db_session)
+
+
+@pytest_asyncio.fixture
 async def seeded_project(
     db_session: AsyncSession,
+    principal,
 ) -> tuple[Project, Service]:
-    org = Organization(name="Acme", slug="acme")
-    project = Project(name="Payments", slug="payments", organization=org)
+    project = Project(
+        name="Payments",
+        slug="payments",
+        organization_id=principal.organization_id,
+    )
     service = Service(name="payments-api", project=project)
     db_session.add(project)
+    await db_session.flush()
+    await grant_role(db_session, principal, project, ProjectRole.ADMIN)
     await db_session.commit()
     await db_session.refresh(project)
     await db_session.refresh(service)

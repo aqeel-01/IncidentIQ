@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import CurrentUserDep, SettingsDep, require_project_role
+from app.db.models.enums import ProjectRole
 from app.db.models.investigation_job import InvestigationJobStatus
 from app.db.session import get_db
 from app.domain.investigation import (
@@ -93,6 +95,8 @@ def to_investigation_response(
 async def get_latest_investigation_for_incident(
     incident_id: int,
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
 ) -> InvestigationResponse:
     snapshot = await InvestigationJobService(session).get_latest_for_incident(
         incident_id
@@ -102,6 +106,13 @@ async def get_latest_investigation_for_incident(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"investigation for incident {incident_id} not found",
         )
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=snapshot.project_id,
+        minimum_role=ProjectRole.VIEWER,
+    )
     return to_investigation_response(snapshot)
 
 
@@ -109,6 +120,8 @@ async def get_latest_investigation_for_incident(
 async def get_investigation(
     investigation_id: str,
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
 ) -> InvestigationResponse:
     snapshot = await InvestigationJobService(session).get(investigation_id)
     if snapshot is None:
@@ -116,4 +129,11 @@ async def get_investigation(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"investigation {investigation_id} not found",
         )
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=snapshot.project_id,
+        minimum_role=ProjectRole.VIEWER,
+    )
     return to_investigation_response(snapshot)

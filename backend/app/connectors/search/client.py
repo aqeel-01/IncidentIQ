@@ -9,6 +9,7 @@ import httpx
 from app.connectors.errors import ConnectorConnectionError
 from app.connectors.search.config import SearchIndexConnectorConfig
 from app.connectors.search.errors import SearchIndexTimeoutError
+from app.core.security import sanitize_error_message
 
 
 class SearchHTTPClient(Protocol):
@@ -95,7 +96,9 @@ class HttpxSearchClient:
             )
             raise self._timeout_error(msg) from exc
         except httpx.HTTPError as exc:
-            msg = f"{self._system_name} request failed: {exc}"
+            msg = sanitize_error_message(
+                f"{self._system_name} request failed: {exc}"
+            )
             raise ConnectorConnectionError(msg) from exc
 
         payload = response.json()

@@ -12,6 +12,7 @@ from app.connectors.database.dialect import normalize_connection_url
 from app.connectors.database.errors import DatabaseQueryError
 from app.connectors.database.query import BuiltLogQuery
 from app.connectors.database.read_only import validate_read_only_sql
+from app.core.security import sanitize_error_message
 
 
 class DatabaseSQLClient(Protocol):
@@ -43,7 +44,7 @@ class SqlAlchemyDatabaseClient:
                 result = await connection.execute(query.statement, query.params)
                 mappings = result.mappings().all()
         except Exception as exc:
-            msg = f"database query failed: {exc}"
+            msg = sanitize_error_message(f"database query failed: {exc}")
             raise DatabaseQueryError(msg) from exc
         return [dict(row) for row in mappings]
 

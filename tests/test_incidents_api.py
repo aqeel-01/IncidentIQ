@@ -14,7 +14,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import Settings, get_settings
 from app.db.base import Base
-from app.db.models import IncidentStatus, Organization, Project, Service, Severity
+from app.db.models import IncidentStatus, Project, Service, Severity
+from app.db.models.enums import ProjectRole
 from app.db.session import get_db
 from app.domain.incidents import (
     CreateIncidentInput,
@@ -22,6 +23,7 @@ from app.domain.incidents import (
     IncidentService,
 )
 from app.main import create_app
+from tests.auth_support import create_principal, grant_role, install_current_user
 
 
 def _ts(minutes: int = 0) -> datetime:
@@ -64,7 +66,9 @@ async def db_session(
 
 @pytest.fixture
 def api_client(
-    incident_settings: Settings, db_session: AsyncSession
+    incident_settings: Settings,
+    db_session: AsyncSession,
+    principal,
 ) -> Iterator[TestClient]:
     app = create_app(settings=incident_settings)
     app.dependency_overrides[get_settings] = lambda: incident_settings
@@ -73,6 +77,7 @@ def api_client(
         yield db_session
 
     app.dependency_overrides[get_db] = _override_db
+    install_current_user(app, principal)
 
     with TestClient(app) as client:
         yield client
@@ -81,13 +86,24 @@ def api_client(
 
 
 @pytest_asyncio.fixture
+async def principal(db_session: AsyncSession):
+    return await create_principal(db_session)
+
+
+@pytest_asyncio.fixture
 async def seeded_project(
     db_session: AsyncSession,
+    principal,
 ) -> tuple[Project, Service]:
-    org = Organization(name="Acme", slug="acme")
-    project = Project(name="Payments", slug="payments", organization=org)
+    project = Project(
+        name="Payments",
+        slug="payments",
+        organization_id=principal.organization_id,
+    )
     service = Service(name="payments-api", project=project)
     db_session.add(project)
+    await db_session.flush()
+    await grant_role(db_session, principal, project, ProjectRole.ADMIN)
     await db_session.commit()
     await db_session.refresh(project)
     await db_session.refresh(service)

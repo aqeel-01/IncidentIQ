@@ -18,15 +18,16 @@ from app.db.base import Base
 from app.db.models import (
     InvestigationJobStatus,
     InvestigationStage,
-    Organization,
     Project,
     Severity,
 )
+from app.db.models.enums import ProjectRole
 from app.db.models.investigation_job import InvestigationJob
 from app.db.session import get_db
 from app.domain.incidents import CreateIncidentInput, IncidentService
 from app.domain.investigation.stages import PIPELINE_STAGE_ORDER
 from app.main import create_app
+from tests.auth_support import create_principal, grant_role, install_current_user
 
 
 class RecordingDispatcher:
@@ -82,6 +83,7 @@ def api_client(
     investigation_api_settings: Settings,
     db_session: AsyncSession,
     recording_dispatcher: RecordingDispatcher,
+    principal,
 ) -> Iterator[TestClient]:
     app = create_app(settings=investigation_api_settings)
     app.dependency_overrides[get_settings] = lambda: investigation_api_settings
@@ -93,6 +95,7 @@ def api_client(
         yield db_session
 
     app.dependency_overrides[get_db] = _override_db
+    install_current_user(app, principal)
 
     with TestClient(app) as client:
         yield client
@@ -101,11 +104,23 @@ def api_client(
 
 
 @pytest_asyncio.fixture
-async def seeded_incident(db_session: AsyncSession) -> tuple[Project, int]:
-    org = Organization(name="Acme", slug="acme")
-    project = Project(name="Payments", slug="payments", organization=org)
+async def principal(db_session: AsyncSession):
+    return await create_principal(db_session)
+
+
+@pytest_asyncio.fixture
+async def seeded_incident(
+    db_session: AsyncSession,
+    principal,
+) -> tuple[Project, int]:
+    project = Project(
+        name="Payments",
+        slug="payments",
+        organization_id=principal.organization_id,
+    )
     db_session.add(project)
     await db_session.flush()
+    await grant_role(db_session, principal, project, ProjectRole.ADMIN)
 
     created = await IncidentService(db_session).create(
         CreateIncidentInput(

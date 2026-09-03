@@ -9,12 +9,15 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Install dependencies first for better layer caching.
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md alembic.ini ./
 COPY backend ./backend
 RUN pip install --upgrade pip && pip install .
 
-# Run as a non-root user.
-RUN useradd --create-home --uid 10001 appuser
+# Writable upload dir for the Compose volume mount (LOG_UPLOAD_DIR).
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir -p /app/data/uploads \
+    && chown -R appuser:appuser /app/data
+
 USER appuser
 
 EXPOSE 8000

@@ -28,7 +28,7 @@ class AlertmanagerWebhookPayload(BaseModel):
 
     receiver: str = Field(min_length=1)
     status: str = Field(min_length=1)
-    alerts: list[AlertmanagerAlert] = Field(min_length=1)
+    alerts: list[AlertmanagerAlert] = Field(min_length=1, max_length=1_000)
     groupLabels: dict[str, str] = Field(default_factory=dict)
     commonLabels: dict[str, str] = Field(default_factory=dict)
     commonAnnotations: dict[str, str] = Field(default_factory=dict)

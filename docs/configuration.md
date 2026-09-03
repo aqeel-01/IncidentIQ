@@ -31,10 +31,28 @@ URLs) fail fast at startup with a clear validation error.
 | `DATABASE_URL`   | `postgresql://incidentiq:incidentiq@localhost:5432/incidentiq`| PostgreSQL connection string (required).      |
 | `REDIS_URL`      | `redis://localhost:6379/0`                                    | Redis connection string (required).           |
 | `OPENSEARCH_URL` | _(empty)_                                                     | Optional OpenSearch endpoint.                 |
-| `PROMETHEUS_URL` | _(empty)_                                                     | Optional Prometheus endpoint.                 |
+| `PROMETHEUS_URL` | _(empty)_                                                     | Optional external Prometheus for the connector (not required for `/metrics`). |
 
 Required dependencies (PostgreSQL, Redis) are verified by `GET /health/ready`.
 Optional services being unavailable must not make the application unusable.
+
+### Observability
+
+IncidentIQ exposes Prometheus metrics at `GET /metrics` (no auth). An external
+Prometheus server can scrape this endpoint, but is **not** required for local
+startup or readiness.
+
+| Metric | Type | Meaning |
+| ------ | ---- | ------- |
+| `incidentiq_http_request_duration_seconds` | histogram | API latency |
+| `incidentiq_http_requests_total` | counter | API request count (errors via `status`) |
+| `incidentiq_investigation_duration_seconds` | histogram | Investigation job duration |
+| `incidentiq_investigation_jobs_total` | counter | Completed/failed investigations |
+| `incidentiq_ai_request_duration_seconds` | histogram | AI provider latency |
+| `incidentiq_ai_requests_total` | counter | AI calls by outcome |
+| `incidentiq_celery_queue_length` | gauge | Celery queue depth (best-effort Redis `LLEN`) |
+| `incidentiq_connector_test_failures_total` | counter | Failed connector tests |
+| `incidentiq_rca_failures_total` | counter | RCA stage failures |
 
 ## AI providers
 
@@ -47,6 +65,23 @@ Optional services being unavailable must not make the application unusable.
 | `RCA_MODEL`            | `large`                     | Which Ollama model the RCA engine uses: `small`/`large`. |
 | `GROQ_API_KEY`         | _(empty)_                   | Groq API key (secret — never commit).              |
 | `GROQ_MODEL`           | _(empty)_                   | Groq model name.                                   |
+| `CONNECTOR_SECRET_KEY` | _(empty)_                   | Fernet key for connector credential encryption. Required in production. |
+| `JWT_SECRET_KEY`       | _(empty)_                   | HMAC secret for user access tokens. Required in production. |
+| `JWT_ALGORITHM`        | `HS256`                     | JWT signing algorithm.                             |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `720`              | Access token lifetime in minutes.                  |
+| `AUTH_BOOTSTRAP_DISABLED` | _(auto)_                 | Override bootstrap; defaults to disabled in production. |
+| `AUTH_LOGIN_RATE_LIMIT` | `10`                       | Max login attempts per IP per window.              |
+| `AUTH_BOOTSTRAP_RATE_LIMIT` | `5`                    | Max bootstrap attempts per IP per window.          |
+| `AUTH_RATE_LIMIT_WINDOW_SECONDS` | `60`              | Auth rate-limit window.                            |
+| `UPLOAD_RATE_LIMIT`    | `30`                        | Max log uploads per IP per window.                 |
+| `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` | `60`            | Upload rate-limit window.                          |
+| `ALERTMANAGER_MAX_ALERTS_PER_WEBHOOK` | `200`        | Max alerts accepted in one webhook payload.        |
+
+## Connector management
+
+Configured connectors are stored per project. Public settings are returned by
+the API; credentials are encrypted at rest with `CONNECTOR_SECRET_KEY` and are
+never included in API responses (only the configured secret field names are).
 | `AI_ENABLE_FALLBACK`   | `false`                     | Enable provider fallback.                          |
 | `AI_FALLBACK_PROVIDER` | `groq`                      | `ollama` or `groq`.                                |
 | `RCA_TEMPERATURE`      | `0.1`                       | Sampling temperature, `0.0`–`2.0`.                 |

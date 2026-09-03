@@ -8,7 +8,7 @@ React + Vite dashboard for IncidentIQ.
 
 - App routing (`/` → `/incidents`, `/incidents/:id`, `/system`, `/login`)
 - Typed FastAPI client with Bearer auth header support
-- Auth-ready session layer (`AuthProvider`, token storage, `RequireAuth`)
+- Auth session layer (`AuthProvider`, JWT login, token storage, `RequireAuth`)
 - Shared loading / error UI and an error boundary
 - Dev proxy to the FastAPI backend
 
@@ -47,6 +47,14 @@ React + Vite dashboard for IncidentIQ.
 - The raw evidence cards, stance, source, confidence, evidence chain, and
   quality score remain available alongside the graph
 
+**Connector management (Step 50)** — `/connectors`
+
+- Create, update, delete, enable, and disable configured connectors
+- Test connection against the existing connector abstraction
+- Credentials are write-only: encrypted at rest and never returned by the API
+- Supports Prometheus, OpenSearch, Elasticsearch, GitHub, Azure DevOps, and
+  database connectors
+
 ## Prerequisites
 
 - Node.js 20+
@@ -78,7 +86,7 @@ In development, Vite proxies `/api` and `/health` to
 ## Architecture notes
 
 - `src/api` — HTTP client, typed resources, `ApiError`
-- `src/auth` — session context and token storage (backend auth later)
+- `src/auth` — JWT session context, `/auth/me` restore, and token storage
 - `src/routes` — path helpers and router
 - `src/hooks/useAsync.ts` — loading/error state helper for fetches
   (`keepPreviousData` avoids table flicker while paging)
@@ -88,4 +96,4 @@ In development, Vite proxies `/api` and `/health` to
   pagination, breakdown bars
 - `src/components/investigation` — timeline, signals, evidence, RCA,
   hypotheses, verification, and investigation progress
-- `src/pages` — route pages
+- `src/pages` — route pages including connectors management

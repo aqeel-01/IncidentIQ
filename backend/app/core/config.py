@@ -93,6 +93,31 @@ class Settings(BaseSettings):
     log_upload_max_bytes: int = Field(default=100 * 1024 * 1024, gt=0)
     log_upload_chunk_bytes: int = Field(default=1024 * 1024, gt=0)
 
+    # --- Authentication -------------------------------------------------------
+    # HMAC secret for JWT access tokens. Required in production.
+    # When empty in non-production, a deterministic development key is derived.
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = Field(default=60 * 12, ge=5, le=60 * 24 * 30)
+    # When true, refuse bootstrap even if the user table is empty.
+    # Defaults to true in production via ``resolved_auth_bootstrap_disabled``.
+    auth_bootstrap_disabled: bool | None = None
+
+    # --- Rate limiting --------------------------------------------------------
+    auth_login_rate_limit: int = Field(default=10, ge=1, le=10_000)
+    auth_bootstrap_rate_limit: int = Field(default=5, ge=1, le=10_000)
+    auth_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+    upload_rate_limit: int = Field(default=30, ge=1, le=10_000)
+    upload_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+
+    # --- Connector credential encryption --------------------------------------
+    # Fernet key (url-safe base64-encoded 32-byte key). Generate with Fernet.
+    # When empty in non-production, a deterministic development key is derived.
+    connector_secret_key: str = ""
+
+    # --- Alert ingestion ------------------------------------------------------
+    alertmanager_max_alerts_per_webhook: int = Field(default=200, ge=1, le=10_000)
+
     # --- Error-group similarity ------------------------------------------------
     error_similarity_high_confidence_min: float = Field(default=0.92, ge=0.0, le=1.0)
     error_similarity_possible_match_min: float = Field(default=0.75, ge=0.0, le=1.0)
@@ -189,6 +214,12 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def resolved_auth_bootstrap_disabled(self) -> bool:
+        if self.auth_bootstrap_disabled is not None:
+            return self.auth_bootstrap_disabled
+        return self.is_production
 
     @property
     def cors_origin_list(self) -> list[str]:

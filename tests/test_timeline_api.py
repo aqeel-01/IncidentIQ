@@ -14,7 +14,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import Settings, get_settings
 from app.db.base import Base
-from app.db.models import Severity
+from app.db.models import Organization, Severity
+from app.db.models.enums import ProjectRole
 from app.db.session import get_db
 from app.domain.events import (
     AlertEvent,
@@ -26,6 +27,7 @@ from app.domain.events import (
 from app.domain.incidents import CreateIncidentInput, IncidentService
 from app.domain.ingestion import EventIngestionService
 from app.main import create_app
+from tests.auth_support import create_principal, grant_role, install_current_user
 from tests.test_timeline_service import _base_event_fields, _seed_project, _ts
 
 
@@ -67,6 +69,7 @@ async def db_session(
 def api_client(
     timeline_settings: Settings,
     db_session: AsyncSession,
+    principal,
 ) -> Iterator[TestClient]:
     app = create_app(settings=timeline_settings)
     app.dependency_overrides[get_settings] = lambda: timeline_settings
@@ -75,6 +78,7 @@ def api_client(
         yield db_session
 
     app.dependency_overrides[get_db] = _override_db
+    install_current_user(app, principal)
 
     with TestClient(app) as client:
         yield client
@@ -82,12 +86,20 @@ def api_client(
     app.dependency_overrides.clear()
 
 
+@pytest_asyncio.fixture
+async def principal(db_session: AsyncSession):
+    return await create_principal(db_session)
+
+
 @pytest.mark.asyncio
 async def test_get_timeline_returns_chronological_payload(
     api_client: TestClient,
     db_session: AsyncSession,
+    principal,
 ) -> None:
-    project, service = await _seed_project(db_session)
+    org = await db_session.get(Organization, principal.organization_id)
+    project, service = await _seed_project(db_session, organization=org)
+    await grant_role(db_session, principal, project, ProjectRole.ADMIN)
     ingestion = EventIngestionService(db_session)
 
     await ingestion.ingest_batch(

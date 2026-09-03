@@ -27,6 +27,8 @@ from app.db.models import (
     IncidentStatus,
     Organization,
     Project,
+    ProjectMembership,
+    ProjectRole,
     Service,
     Severity,
     User,
@@ -195,6 +197,33 @@ async def test_event_links_to_error_group_and_service(session: AsyncSession) -> 
 async def test_foreign_key_is_enforced(session: AsyncSession) -> None:
     # organization_id points to a non-existent organization.
     session.add(User(organization_id=9999, email="x@y.test", hashed_password="x"))
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+async def test_project_membership_role_and_uniqueness(session: AsyncSession) -> None:
+    org = Organization(name="Acme", slug="acme")
+    project = Project(name="Payments", slug="payments", organization=org)
+    user = User(email="a@acme.test", hashed_password="x", organization=org)
+    session.add_all([project, user])
+    await session.flush()
+    session.add(
+        ProjectMembership(
+            user_id=user.id,
+            project_id=project.id,
+            role=ProjectRole.ENGINEER,
+        )
+    )
+    await session.commit()
+
+    session.add(
+        ProjectMembership(
+            user_id=user.id,
+            project_id=project.id,
+            role=ProjectRole.ADMIN,
+        )
+    )
     with pytest.raises(IntegrityError):
         await session.commit()
     await session.rollback()

@@ -1,25 +1,91 @@
-# Minimal local environment: backend API + required infrastructure.
-# Optional services (OpenSearch, Prometheus, Grafana, Alertmanager) will be
-# added under the `full` profile in a later step.
+# IncidentIQ Docker environments
+#
+# Profiles:
+#   minimal  — FastAPI, PostgreSQL, Redis, Ollama (+ Celery worker)
+#              Local AI only (AI_MODE=local). No cloud services required.
+#   full     — minimal stack plus OpenSearch, Prometheus, Grafana, Alertmanager.
+#
+# Usage:
+#   docker compose -f infrastructure/docker-compose.yml --profile minimal up --build
+#   docker compose -f infrastructure/docker-compose.yml --env-file infrastructure/full.env --profile full up --build
+#
+# Migrations (after API is healthy):
+#   docker compose -f infrastructure/docker-compose.yml --profile minimal exec api alembic upgrade head
+#
+# Pull a local Ollama model (once):
+#   docker compose -f infrastructure/docker-compose.yml --profile minimal exec ollama ollama pull llama3.2:1b
+
+name: incidentiq
+
+x-app-environment: &app-environment
+  APP_ENV: development
+  DATABASE_URL: postgresql://incidentiq:incidentiq@postgres:5432/incidentiq
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/0
+  CELERY_DEFAULT_QUEUE: investigation
+  AI_MODE: local
+  OLLAMA_BASE_URL: http://ollama:11434
+  OLLAMA_MODEL_SMALL: llama3.2:1b
+  OLLAMA_MODEL_LARGE: llama3.2:1b
+  RCA_MODEL: small
+  CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+  LOG_UPLOAD_DIR: /app/data/uploads
+  OPENSEARCH_URL: ${OPENSEARCH_URL:-}
+  PROMETHEUS_URL: ${PROMETHEUS_URL:-}
+
+x-app-build: &app-build
+  context: ..
+  dockerfile: Dockerfile
 
 services:
   api:
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    profiles: ["minimal", "full"]
+    build: *app-build
     ports:
       - "8000:8000"
     environment:
-      APP_ENV: development
-      DATABASE_URL: postgresql://incidentiq:incidentiq@postgres:5432/incidentiq
-      REDIS_URL: redis://redis:6379/0
+      <<: *app-environment
+    volumes:
+      - upload_data:/app/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ollama:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    profiles: ["minimal", "full"]
+    build: *app-build
+    command: celery -A app.workers.celery_app worker --loglevel=info -Q investigation
+    environment:
+      <<: *app-environment
+    volumes:
+      - upload_data:/app/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
 
   postgres:
+    profiles: ["minimal", "full"]
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: incidentiq
@@ -30,35 +96,122 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U incidentiq"]
+      test: ["CMD-SHELL", "pg_isready -U incidentiq -d incidentiq"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
 
   redis:
+    profiles: ["minimal", "full"]
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
 
-  worker:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info -Q investigation
+  ollama:
+    profiles: ["minimal", "full"]
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 15s
+
+  opensearch:
+    profiles: ["full"]
+    image: opensearchproject/opensearch:2.19.1
     environment:
-      APP_ENV: development
-      DATABASE_URL: postgresql://incidentiq:incidentiq@postgres:5432/incidentiq
-      REDIS_URL: redis://redis:6379/0
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:9200/_cluster/health || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  prometheus:
+    profiles: ["full"]
+    image: prom/prometheus:v3.2.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      api:
+        condition: service_started
+
+  alertmanager:
+    profiles: ["full"]
+    image: prom/alertmanager:v0.28.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    depends_on:
+      api:
+        condition: service_started
+
+  grafana:
+    profiles: ["full"]
+    image: grafana/grafana:11.5.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: incidentiq
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_started
 
 volumes:
   pgdata:
+  redisdata:
+  ollama_data:
+  upload_data:
+  opensearch_data:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:

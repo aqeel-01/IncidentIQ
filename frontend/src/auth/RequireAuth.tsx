@@ -9,12 +9,11 @@ type RequireAuthProps = {
   children: ReactNode;
   /**
    * When false, allow anonymous access while still mounting the auth shell.
-   * Useful until backend authentication is enabled.
    */
   enabled?: boolean;
 };
 
-export function RequireAuth({ children, enabled = false }: RequireAuthProps) {
+export function RequireAuth({ children, enabled = true }: RequireAuthProps) {
   const auth = useAuth();
   const location = useLocation();
 

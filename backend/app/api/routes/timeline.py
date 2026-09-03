@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.enums import Severity
+from app.api.deps import CurrentUserDep, SettingsDep, require_project_role
+from app.db.models.enums import ProjectRole, Severity
 from app.db.session import get_db
 from app.domain.correlation.types import (
     CorrelationKind,
@@ -267,8 +268,7 @@ def _service_correlation_response(
         return None
     return ServiceCorrelationResponse(
         relationships=[
-            _scored_service_relationship_response(item)
-            for item in result.relationships
+            _scored_service_relationship_response(item) for item in result.relationships
         ],
         dependencies=[
             _service_dependency_response(item) for item in result.dependencies
@@ -281,6 +281,8 @@ def _service_correlation_response(
 async def get_incident_timeline(
     incident_id: int,
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
 ) -> TimelineResponse:
     result = await TimelineService(session).build(incident_id)
     if result is None:
@@ -288,6 +290,13 @@ async def get_incident_timeline(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"incident {incident_id} not found",
         )
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=result.project_id,
+        minimum_role=ProjectRole.VIEWER,
+    )
 
     return TimelineResponse(
         incident_id=result.incident_id,
@@ -298,16 +307,12 @@ async def get_incident_timeline(
         window_end=result.window_end,
         entries=[
             entry
-            for entry in (
-                _entry_response(item) for item in result.entries
-            )
+            for entry in (_entry_response(item) for item in result.entries)
             if entry is not None
         ],
         markers=_markers_response(result.markers),
         counts=result.counts,
-        correlations=[
-            _correlation_response(item) for item in result.correlations
-        ],
+        correlations=[_correlation_response(item) for item in result.correlations],
         deployment_correlation=_deployment_correlation_response(
             result.deployment_correlation,
         ),

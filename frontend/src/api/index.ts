@@ -1,4 +1,6 @@
+export * from "@/api/auth";
 export * from "@/api/client";
+export * from "@/api/connectors";
 export * from "@/api/errors";
 export * from "@/api/evidence";
 export * from "@/api/health";

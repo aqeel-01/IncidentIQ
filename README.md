@@ -96,23 +96,52 @@ verification steps. Evidence is visualized as a readable deployment → anomaly
   job and progress for an incident.
 - `GET /api/v1/rca/incidents/{id}/latest` — latest persisted RCA result,
   including hypotheses and verification steps.
+- Connector management (`/connectors` UI and `/api/v1/connectors`): create,
+  update, delete, enable, disable, and test connections. Stored credentials are
+  encrypted and never returned by the API.
+- Authentication (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`) issues JWT
+  access tokens. Project access is authorized with roles `ADMIN`, `ENGINEER`,
+  and `VIEWER`. First-time setup is `POST /api/v1/auth/bootstrap`.
+
+Health, login, and bootstrap stay unauthenticated (bootstrap is disabled by
+default in production). Auth and upload endpoints are rate-limited per client
+IP. All other `/api/v1` routes require a Bearer token and a project membership
+at the required role. Logs and connector probe details are scrubbed so
+credentials and production secrets are not emitted.
 
 ### Health endpoints
 
 - `GET /health` — liveness; confirms the API process is up.
 - `GET /health/ready` — readiness; verifies required infrastructure
   (PostgreSQL, Redis). Returns `503` when a required dependency is unavailable.
+- `GET /metrics` — Prometheus metrics (API latency/errors, investigation
+  duration, AI latency, Celery queue size, connector/RCA failures). Scrapable
+  without running an external Prometheus server; Prometheus is not required
+  for local startup.
 - `POST /api/v1/logs/upload` — stream a log file upload (`.log`, `.txt`,
   `.json`, `.jsonl`, `.csv`); returns a `job_id` for ingestion tracking.
 
 ## Running with Docker
 
-```bash
-# Minimal environment: API + PostgreSQL + Redis
-docker compose -f infrastructure/docker-compose.yml up --build
+Compose profiles live in [`infrastructure/docker-compose.yml`](infrastructure/docker-compose.yml).
+See [`infrastructure/README.md`](infrastructure/README.md) for ports and first-run steps.
 
-# Apply migrations inside the API container (first run)
-docker compose -f infrastructure/docker-compose.yml exec api alembic upgrade head
+```bash
+# Minimal: FastAPI + PostgreSQL + Redis + Ollama (+ Celery worker)
+# No cloud services required (AI_MODE=local).
+docker compose -f infrastructure/docker-compose.yml --profile minimal up --build
+
+# Apply migrations (first run)
+docker compose -f infrastructure/docker-compose.yml --profile minimal exec api \
+  alembic upgrade head
+
+# Pull the default local model once
+docker compose -f infrastructure/docker-compose.yml --profile minimal exec ollama \
+  ollama pull llama3.2:1b
+
+# Full: minimal + OpenSearch + Prometheus + Grafana + Alertmanager
+docker compose -f infrastructure/docker-compose.yml \
+  --env-file infrastructure/full.env --profile full up --build
 ```
 
 ## Database & migrations
@@ -142,6 +171,9 @@ Migration `0002_core_models` defines the tenant and investigation entities:
 `status` (`OPEN`, `INVESTIGATING`, `IDENTIFIED`, `RESOLVED`, `CLOSED`) and
 `severity` (`INFO`, `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) are string-backed
 enums.
+
+Migration `0013_project_memberships` adds per-project RBAC (`ADMIN`,
+`ENGINEER`, `VIEWER`) via `project_memberships`.
 
 Migration `0003_log_uploads` adds the `log_uploads` table for tracking uploaded
 log files and their ingestion job status (`QUEUED`, `PROCESSING`, `COMPLETED`,

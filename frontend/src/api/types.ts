@@ -314,3 +314,52 @@ export type HistoricalRCARecord = {
   created_at: string;
   updated_at: string;
 };
+
+export type ConnectorType =
+  | "opensearch"
+  | "elasticsearch"
+  | "database"
+  | "prometheus"
+  | "github"
+  | "azure_devops";
+
+export type ConfiguredConnector = {
+  id: number;
+  project_id: number;
+  name: string;
+  connector_type: ConnectorType;
+  enabled: boolean;
+  settings: Record<string, unknown>;
+  configured_credentials: string[];
+  last_tested_at: string | null;
+  last_test_success: boolean | null;
+  last_test_detail: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConnectorListResponse = {
+  items: ConfiguredConnector[];
+  total: number;
+};
+
+export type ConnectorTypeInfo = {
+  connector_type: ConnectorType;
+  label: string;
+  secret_fields: string[];
+  setting_fields: string[];
+};
+
+export type ConnectorTypesResponse = {
+  items: ConnectorTypeInfo[];
+};
+
+export type ConnectorConnectionTest = {
+  connector_id: number;
+  connector_type: ConnectorType;
+  name: string;
+  success: boolean;
+  detail: string;
+  tested_at: string;
+  connector: ConfiguredConnector;
+};

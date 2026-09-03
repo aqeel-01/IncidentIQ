@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings, get_settings
+from app.api.deps import CurrentUserDep, SettingsDep, require_project_role
+from app.db.models.enums import ProjectRole
 from app.db.models.log_upload import LogUploadStatus
 from app.db.session import get_db
 from app.domain.uploads import (
@@ -20,7 +21,6 @@ from app.domain.uploads import (
 router = APIRouter(prefix="/api/v1/logs", tags=["logs"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
-SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 class LogUploadResponse(BaseModel):
@@ -41,6 +41,7 @@ class LogUploadResponse(BaseModel):
 async def upload_log(
     session: SessionDep,
     settings: SettingsDep,
+    user: CurrentUserDep,
     project_id: Annotated[int, Form(description="Project that owns this upload")],
     file: Annotated[UploadFile, File(description="Log file to ingest")],
 ) -> LogUploadResponse:
@@ -50,6 +51,14 @@ async def upload_log(
     memory. Parsing and event ingestion are handled asynchronously in later
     pipeline steps.
     """
+
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=project_id,
+        minimum_role=ProjectRole.ENGINEER,
+    )
 
     service = LogUploadService(session, settings)
     try:

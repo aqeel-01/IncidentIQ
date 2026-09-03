@@ -19,6 +19,7 @@ export function Header() {
           <NavLink to={paths.incidents} end>
             Dashboard
           </NavLink>
+          <NavLink to={paths.connectors}>Connectors</NavLink>
           <NavLink to={paths.system}>System</NavLink>
         </nav>
 

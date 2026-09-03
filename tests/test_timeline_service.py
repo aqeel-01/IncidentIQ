@@ -63,8 +63,11 @@ async def session() -> AsyncIterator[AsyncSession]:
     await engine.dispose()
 
 
-async def _seed_project(session: AsyncSession) -> tuple[Project, Service]:
-    org = Organization(name="Acme", slug="acme")
+async def _seed_project(
+    session: AsyncSession,
+    organization: Organization | None = None,
+) -> tuple[Project, Service]:
+    org = organization or Organization(name="Acme", slug="acme")
     project = Project(name="Payments", slug="payments", organization=org)
     service = Service(name="payments-api", project=project)
     session.add(project)

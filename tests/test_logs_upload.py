@@ -14,9 +14,11 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import Settings, get_settings
 from app.db.base import Base
-from app.db.models import LogUpload, LogUploadStatus, Organization, Project
+from app.db.models import LogUpload, LogUploadStatus, Project
+from app.db.models.enums import ProjectRole
 from app.db.session import get_db
 from app.main import create_app
+from tests.auth_support import create_principal, grant_role, install_current_user
 
 
 @pytest.fixture
@@ -58,7 +60,9 @@ async def db_session(
 
 @pytest.fixture
 def upload_client(
-    upload_settings: Settings, db_session: AsyncSession
+    upload_settings: Settings,
+    db_session: AsyncSession,
+    principal,
 ) -> Iterator[TestClient]:
     app = create_app(settings=upload_settings)
     app.dependency_overrides[get_settings] = lambda: upload_settings
@@ -67,6 +71,7 @@ def upload_client(
         yield db_session
 
     app.dependency_overrides[get_db] = _override_db
+    install_current_user(app, principal)
 
     with TestClient(app) as client:
         yield client
@@ -75,10 +80,20 @@ def upload_client(
 
 
 @pytest_asyncio.fixture
-async def project_id(db_session: AsyncSession) -> int:
-    org = Organization(name="Acme", slug="acme")
-    project = Project(name="Payments", slug="payments", organization=org)
+async def principal(db_session: AsyncSession):
+    return await create_principal(db_session)
+
+
+@pytest_asyncio.fixture
+async def project_id(db_session: AsyncSession, principal) -> int:
+    project = Project(
+        name="Payments",
+        slug="payments",
+        organization_id=principal.organization_id,
+    )
     db_session.add(project)
+    await db_session.flush()
+    await grant_role(db_session, principal, project, ProjectRole.ADMIN)
     await db_session.commit()
     await db_session.refresh(project)
     return project.id

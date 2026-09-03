@@ -9,12 +9,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import InvestigationDispatcherDep
+from app.api.deps import (
+    CurrentUserDep,
+    InvestigationDispatcherDep,
+    SettingsDep,
+    require_project_role,
+)
 from app.api.routes.investigations import (
     InvestigationResponse,
     to_investigation_response,
 )
-from app.db.models.enums import IncidentStatus, Severity
+from app.db.models.enums import IncidentStatus, ProjectRole, Severity
 from app.db.session import get_db
 from app.domain.incidents import (
     CreateIncidentInput,
@@ -108,7 +113,16 @@ def _to_create_response(result: IncidentCreateResult) -> CreateIncidentResponse:
 async def create_incident(
     body: CreateIncidentRequest,
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
 ) -> CreateIncidentResponse:
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=body.project_id,
+        minimum_role=ProjectRole.ENGINEER,
+    )
     service = IncidentService(session)
     try:
         result = await service.create(CreateIncidentInput(**body.model_dump()))
@@ -135,8 +149,24 @@ async def create_incident(
 async def investigate_incident(
     incident_id: int,
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
     dispatcher: InvestigationDispatcherDep,
 ) -> InvestigationResponse:
+    incident = await IncidentService(session).get_by_id(incident_id)
+    if incident is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"incident {incident_id} not found",
+        )
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=incident.project_id,
+        minimum_role=ProjectRole.ENGINEER,
+    )
+
     service = InvestigationJobService(session, dispatcher=dispatcher)
     try:
         snapshot = await service.submit_for_incident(incident_id)
@@ -153,6 +183,8 @@ async def investigate_incident(
 @router.get("", response_model=IncidentListResponse)
 async def list_incidents(
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
     project_id: Annotated[int, Query(description="Project to list incidents for")],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -165,6 +197,13 @@ async def list_incidents(
         Query(alias="status", description="Filter by one or more statuses"),
     ] = None,
 ) -> IncidentListResponse:
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=project_id,
+        minimum_role=ProjectRole.VIEWER,
+    )
     service = IncidentService(session)
     try:
         result = await service.list(
@@ -193,12 +232,21 @@ async def list_incidents(
 @router.get("/summary", response_model=IncidentSummaryResponse)
 async def get_incident_summary(
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
     project_id: Annotated[int, Query(description="Project to summarize")],
     recent_hours: Annotated[
         int,
         Query(ge=1, le=24 * 30, description="Window for 'recent' incidents"),
     ] = 24,
 ) -> IncidentSummaryResponse:
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=project_id,
+        minimum_role=ProjectRole.VIEWER,
+    )
     try:
         summary = await IncidentService(session).summarize(
             project_id,
@@ -230,6 +278,8 @@ def _to_summary_response(summary: IncidentSummary) -> IncidentSummaryResponse:
 async def get_incident(
     incident_id: int,
     session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
 ) -> IncidentResponse:
     incident = await IncidentService(session).get_by_id(incident_id)
     if incident is None:
@@ -237,4 +287,11 @@ async def get_incident(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"incident {incident_id} not found",
         )
+    await require_project_role(
+        session=session,
+        settings=settings,
+        user=user,
+        project_id=incident.project_id,
+        minimum_role=ProjectRole.VIEWER,
+    )
     return _to_response(incident)

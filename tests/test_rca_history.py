@@ -83,8 +83,11 @@ def _engine_result(*, evidence_quality: int = 72) -> RCAEngineResult:
     )
 
 
-async def _seed_incident(session: AsyncSession) -> tuple[Project, int]:
-    org = Organization(name="Acme", slug="acme")
+async def _seed_incident(
+    session: AsyncSession,
+    organization: Organization | None = None,
+) -> tuple[Project, int]:
+    org = organization or Organization(name="Acme", slug="acme")
     project = Project(name="Payments", slug="payments", organization=org)
     session.add(project)
     await session.flush()
