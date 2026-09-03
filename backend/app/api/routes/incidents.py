@@ -22,6 +22,7 @@ from app.domain.incidents import (
     IncidentCreateResult,
     IncidentListFilters,
     IncidentService,
+    IncidentSummary,
     IncidentValidationError,
 )
 from app.domain.investigation import InvestigationJobService
@@ -71,6 +72,17 @@ class IncidentListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class IncidentSummaryResponse(BaseModel):
+    project_id: int
+    total: int
+    active: int
+    critical_active: int
+    recent: int
+    recent_window_hours: int
+    by_status: dict[IncidentStatus, int]
+    by_severity: dict[Severity, int]
 
 
 def _to_response(incident) -> IncidentResponse:
@@ -175,6 +187,42 @@ async def list_incidents(
         total=result.total,
         page=result.page,
         page_size=result.page_size,
+    )
+
+
+@router.get("/summary", response_model=IncidentSummaryResponse)
+async def get_incident_summary(
+    session: SessionDep,
+    project_id: Annotated[int, Query(description="Project to summarize")],
+    recent_hours: Annotated[
+        int,
+        Query(ge=1, le=24 * 30, description="Window for 'recent' incidents"),
+    ] = 24,
+) -> IncidentSummaryResponse:
+    try:
+        summary = await IncidentService(session).summarize(
+            project_id,
+            recent_window_hours=recent_hours,
+        )
+    except IncidentValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    return _to_summary_response(summary)
+
+
+def _to_summary_response(summary: IncidentSummary) -> IncidentSummaryResponse:
+    return IncidentSummaryResponse(
+        project_id=summary.project_id,
+        total=summary.total,
+        active=summary.active,
+        critical_active=summary.critical_active,
+        recent=summary.recent,
+        recent_window_hours=summary.recent_window_hours,
+        by_status=summary.by_status,
+        by_severity=summary.by_severity,
     )
 
 

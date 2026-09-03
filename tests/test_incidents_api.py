@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -234,6 +234,75 @@ def test_list_incidents_filters_by_severity_and_status(
     body = response.json()
     assert body["total"] == 1
     assert body["items"][0]["title"] == "Critical open"
+
+
+def test_incident_summary_reports_dashboard_counts(
+    api_client: TestClient,
+    seeded_project: tuple[Project, Service],
+) -> None:
+    project, service = seeded_project
+    now = datetime.now(UTC)
+    incidents = [
+        ("Critical open", Severity.CRITICAL, IncidentStatus.OPEN, now),
+        (
+            "Critical resolved",
+            Severity.CRITICAL,
+            IncidentStatus.RESOLVED,
+            now - timedelta(days=3),
+        ),
+        ("High investigating", Severity.HIGH, IncidentStatus.INVESTIGATING, now),
+        ("Low closed", Severity.LOW, IncidentStatus.CLOSED, now - timedelta(days=10)),
+    ]
+    for title, severity, incident_status, started_at in incidents:
+        response = api_client.post(
+            "/api/v1/incidents",
+            json={
+                "project_id": project.id,
+                "service_id": service.id,
+                "title": title,
+                "environment": "production",
+                "severity": severity,
+                "status": incident_status,
+                "started_at": started_at.isoformat(),
+            },
+        )
+        assert response.status_code == 201
+
+    response = api_client.get(
+        "/api/v1/incidents/summary",
+        params={"project_id": project.id, "recent_hours": 24},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 4
+    assert body["active"] == 2
+    assert body["critical_active"] == 1
+    assert body["recent"] == 2
+    assert body["recent_window_hours"] == 24
+    assert body["by_status"]["OPEN"] == 1
+    assert body["by_status"]["RESOLVED"] == 1
+    assert body["by_status"]["IDENTIFIED"] == 0
+    assert body["by_severity"]["CRITICAL"] == 2
+    assert body["by_severity"]["INFO"] == 0
+
+
+def test_incident_summary_empty_project_returns_zero_counts(
+    api_client: TestClient,
+    seeded_project: tuple[Project, Service],
+) -> None:
+    project, _service = seeded_project
+    response = api_client.get(
+        "/api/v1/incidents/summary",
+        params={"project_id": project.id},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 0
+    assert body["active"] == 0
+    assert body["critical_active"] == 0
+    assert body["recent"] == 0
 
 
 def test_get_incident_by_id(

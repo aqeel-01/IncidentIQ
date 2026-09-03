@@ -35,7 +35,7 @@ backend/          FastAPI backend application
     db/           Declarative base, async engine, session management
       models/     Core ORM models (organizations, users, projects, …)
   alembic/        Database migrations (async Alembic environment)
-frontend/         Web dashboard (added later)
+frontend/         React + Vite web dashboard
 infrastructure/   Docker Compose and deployment assets
 docs/             Project documentation
 tests/            Test suite (pytest)
@@ -71,6 +71,31 @@ uvicorn app.main:app --reload --app-dir backend
 
 The API is then available at http://localhost:8000
 (interactive docs at http://localhost:8000/docs).
+
+### Frontend (dashboard)
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+The dashboard runs at http://localhost:5173 and proxies `/api` + `/health` to
+the FastAPI backend. The incident dashboard (`/incidents`) shows active,
+critical, and recent counts, status/severity breakdowns, and a filterable,
+paginated incident table. Incident detail pages show the live investigation
+timeline, errors, metrics, deployments, evidence, RCA, hypotheses, and
+verification steps. Evidence is visualized as a readable deployment → anomaly
+→ error → service → incident graph with inspectable source details. See
+[`frontend/README.md`](frontend/README.md).
+
+- `GET /api/v1/incidents/summary?project_id=…` — dashboard aggregate counts
+  (active, critical-active, recent within `recent_hours`, by status/severity).
+- `GET /api/v1/investigations/by-incident/{id}/latest` — latest investigation
+  job and progress for an incident.
+- `GET /api/v1/rca/incidents/{id}/latest` — latest persisted RCA result,
+  including hypotheses and verification steps.
 
 ### Health endpoints
 

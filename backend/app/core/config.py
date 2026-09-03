@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     app_env: Literal["development", "staging", "production", "test"] = "development"
     app_name: str = "IncidentIQ"
     app_version: str = "0.1.0"
+    # Comma-separated browser origins allowed to call the API (frontend).
+    cors_origins: str = (
+        "http://localhost:5173,http://127.0.0.1:5173"
+    )
 
     # --- Infrastructure ------------------------------------------------------
     # Safe local-development defaults; override per environment.
@@ -185,6 +189,14 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.cors_origins.split(",")
+            if origin.strip()
+        ]
 
     @property
     def resolved_celery_broker_url(self) -> str:

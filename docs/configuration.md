@@ -19,9 +19,10 @@ URLs) fail fast at startup with a clear validation error.
 
 ## Application
 
-| Variable      | Default        | Description                                             |
-| ------------- | -------------- | ------------------------------------------------------- |
-| `APP_ENV`     | `development`  | One of `development`, `staging`, `production`, `test`.  |
+| Variable       | Default                                              | Description                                             |
+| -------------- | ---------------------------------------------------- | ------------------------------------------------------- |
+| `APP_ENV`      | `development`                                        | One of `development`, `staging`, `production`, `test`.  |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173`        | Comma-separated browser origins allowed to call the API.|
 
 ## Infrastructure
 

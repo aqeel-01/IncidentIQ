@@ -97,6 +97,22 @@ class InvestigationJobService:
             return None
         return _snapshot(job)
 
+    async def get_latest_for_incident(
+        self,
+        incident_id: int,
+    ) -> InvestigationJobSnapshot | None:
+        result = await self._session.execute(
+            select(InvestigationJob)
+            .where(InvestigationJob.incident_id == incident_id)
+            .order_by(
+                InvestigationJob.created_at.desc(),
+                InvestigationJob.id.desc(),
+            )
+            .limit(1)
+        )
+        job = result.scalar_one_or_none()
+        return _snapshot(job) if job is not None else None
+
     async def _ensure_incident(self, *, project_id: int, incident_id: int) -> None:
         result = await self._session.execute(
             select(Incident.id).where(

@@ -15,6 +15,7 @@ from app.api.routes import (
     incidents,
     investigations,
     logs,
+    rca,
     timeline,
 )
 
@@ -25,4 +26,5 @@ api_router.include_router(incidents.router)
 api_router.include_router(investigations.router)
 api_router.include_router(timeline.router)
 api_router.include_router(evidence.router)
+api_router.include_router(rca.router)
 api_router.include_router(alerts.router)

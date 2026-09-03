@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
@@ -94,6 +94,20 @@ class IncidentListResult:
     total: int
     page: int
     page_size: int
+
+
+@dataclass(frozen=True, slots=True)
+class IncidentSummary:
+    """Aggregate counts for the incident dashboard."""
+
+    project_id: int
+    total: int
+    active: int
+    critical_active: int
+    recent: int
+    recent_window_hours: int
+    by_status: dict[IncidentStatus, int]
+    by_severity: dict[Severity, int]
 
 
 def _to_utc(value: datetime) -> datetime:
@@ -281,6 +295,79 @@ class IncidentService:
             total=total,
             page=filters.page,
             page_size=filters.page_size,
+        )
+
+    async def summarize(
+        self,
+        project_id: int,
+        *,
+        recent_window_hours: int = 24,
+        now: datetime | None = None,
+    ) -> IncidentSummary:
+        if recent_window_hours < 1:
+            raise IncidentValidationError("recent_window_hours must be >= 1")
+
+        reference = _to_utc(now or datetime.now(UTC))
+        recent_since = reference - timedelta(hours=recent_window_hours)
+
+        status_rows = (
+            await self._session.execute(
+                select(Incident.status, func.count())
+                .where(Incident.project_id == project_id)
+                .group_by(Incident.status)
+            )
+        ).all()
+        severity_rows = (
+            await self._session.execute(
+                select(Incident.severity, func.count())
+                .where(Incident.project_id == project_id)
+                .group_by(Incident.severity)
+            )
+        ).all()
+
+        by_status = {status: 0 for status in IncidentStatus}
+        for status, count in status_rows:
+            by_status[IncidentStatus(status)] = int(count)
+
+        by_severity = {severity: 0 for severity in Severity}
+        for severity, count in severity_rows:
+            by_severity[Severity(severity)] = int(count)
+
+        critical_active = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(Incident)
+                .where(
+                    Incident.project_id == project_id,
+                    Incident.severity == Severity.CRITICAL,
+                    Incident.status.in_(ACTIVE_INCIDENT_STATUSES),
+                )
+            )
+        ).scalar_one()
+        recent = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(Incident)
+                .where(
+                    Incident.project_id == project_id,
+                    Incident.started_at >= recent_since,
+                )
+            )
+        ).scalar_one()
+
+        return IncidentSummary(
+            project_id=project_id,
+            total=sum(by_status.values()),
+            active=sum(
+                count
+                for status, count in by_status.items()
+                if status in ACTIVE_INCIDENT_STATUSES
+            ),
+            critical_active=int(critical_active),
+            recent=int(recent),
+            recent_window_hours=recent_window_hours,
+            by_status=by_status,
+            by_severity=by_severity,
         )
 
 

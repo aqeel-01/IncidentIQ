@@ -85,8 +85,8 @@ def api_client(
 ) -> Iterator[TestClient]:
     app = create_app(settings=investigation_api_settings)
     app.dependency_overrides[get_settings] = lambda: investigation_api_settings
-    app.dependency_overrides[get_investigation_dispatcher] = (
-        lambda: recording_dispatcher
+    app.dependency_overrides[get_investigation_dispatcher] = lambda: (
+        recording_dispatcher
     )
 
     async def _override_db() -> AsyncIterator[AsyncSession]:
@@ -264,3 +264,52 @@ def test_get_investigation_returns_404_for_missing_job(
 
     assert response.status_code == 404
     assert "investigation does-not-exist not found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_get_latest_investigation_for_incident(
+    api_client: TestClient,
+    db_session: AsyncSession,
+    seeded_incident: tuple[Project, int],
+) -> None:
+    project, incident_id = seeded_incident
+    job = InvestigationJob(
+        id="latest-job",
+        project_id=project.id,
+        incident_id=incident_id,
+        status=InvestigationJobStatus.RUNNING,
+        stage=InvestigationStage.BUILD_EVIDENCE,
+        stage_artifacts={
+            stage.value: {"done": True} for stage in PIPELINE_STAGE_ORDER[:9]
+        },
+        attempt_count=1,
+    )
+    db_session.add(job)
+    await db_session.commit()
+
+    response = api_client.get(
+        f"/api/v1/investigations/by-incident/{incident_id}/latest"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "latest-job"
+    assert body["incident_id"] == incident_id
+    assert body["stage"] == InvestigationStage.BUILD_EVIDENCE.value
+
+
+def test_get_latest_investigation_returns_404_when_not_started(
+    api_client: TestClient,
+    seeded_incident: tuple[Project, int],
+) -> None:
+    _project, incident_id = seeded_incident
+
+    response = api_client.get(
+        f"/api/v1/investigations/by-incident/{incident_id}/latest"
+    )
+
+    assert response.status_code == 404
+    assert (
+        f"investigation for incident {incident_id} not found"
+        in (response.json()["detail"])
+    )

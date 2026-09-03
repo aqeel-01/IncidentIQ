@@ -86,6 +86,25 @@ def to_investigation_response(
     )
 
 
+@router.get(
+    "/by-incident/{incident_id}/latest",
+    response_model=InvestigationResponse,
+)
+async def get_latest_investigation_for_incident(
+    incident_id: int,
+    session: SessionDep,
+) -> InvestigationResponse:
+    snapshot = await InvestigationJobService(session).get_latest_for_incident(
+        incident_id
+    )
+    if snapshot is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"investigation for incident {incident_id} not found",
+        )
+    return to_investigation_response(snapshot)
+
+
 @router.get("/{investigation_id}", response_model=InvestigationResponse)
 async def get_investigation(
     investigation_id: str,
