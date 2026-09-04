@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import io
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
@@ -31,7 +29,6 @@ from app.db.models.service import Service
 from app.domain.deduplication import ErrorGroupDeduplicationService
 from app.domain.deduplication.service import error_group_input_from_normalized
 from app.domain.events import CanonicalEventBase, LogEvent
-from app.domain.fingerprinting import compute_logical_error_fingerprint
 from app.domain.ingestion import EventIngestionService, IngestionStatus
 from app.domain.investigation.converters import normalized_log_record_to_event
 from app.domain.investigation.sources import (
@@ -39,8 +36,12 @@ from app.domain.investigation.sources import (
     InvestigationSources,
 )
 from app.domain.investigation.stages import next_incomplete_stage
+from app.domain.investigation.streaming import (
+    deduplicate_normalized_records,
+    iter_parsed_log_sources,
+)
 from app.domain.investigation.types import InvestigationJobError, InvestigationJobResult
-from app.domain.normalization import normalize_log_event, normalize_parsed_records
+from app.domain.normalization import normalize_log_event
 from app.domain.normalization.types import NormalizedLogRecord
 from app.domain.parsing.parsers.plain_text import PlainTextLogParser
 from app.domain.parsing.pipeline import LogParsingPipeline
@@ -109,9 +110,7 @@ class InvestigationOrchestrator:
 
         incident = await self._load_incident(job.incident_id, job.project_id)
         if incident is None:
-            msg = (
-                f"incident {job.incident_id} not found for project {job.project_id}"
-            )
+            msg = f"incident {job.incident_id} not found for project {job.project_id}"
             await self._mark_failed(job, error=msg)
             raise InvestigationJobError(msg)
 
@@ -203,49 +202,56 @@ class InvestigationOrchestrator:
         if state.parsed_records:
             return {"parsed_records": len(state.parsed_records)}
 
-        for line in state.collected.raw_log_lines:
-            handle = io.StringIO(line + "\n")
-            state.parsed_records.extend(self._plain_text_parser.iter_records(handle))
-
-        for path in state.collected.log_file_paths:
-            for record in self._parser.iter_parse(Path(path)):
-                state.parsed_records.append(record)
+        # Stream from disk/lines. Prefer JSONL for large files (line-oriented).
+        for record in iter_parsed_log_sources(
+            log_file_paths=state.collected.log_file_paths,
+            raw_log_lines=state.collected.raw_log_lines,
+            parser=self._parser,
+            plain_text_parser=self._plain_text_parser,
+        ):
+            state.parsed_records.append(record)
 
         return {"parsed_records": len(state.parsed_records)}
 
     async def _stage_normalize(self, state: _PipelineState) -> dict[str, Any]:
         if not state.normalized_records:
-            state.normalized_records = normalize_parsed_records(state.parsed_records)
+            from app.domain.normalization import iter_normalize_parsed_records
+
+            state.normalized_records = list(
+                iter_normalize_parsed_records(
+                    state.parsed_records,
+                    copy_raw_data=False,
+                )
+            )
+            # Drop parsed copies once normalized to avoid holding both sets.
+            parsed_count = len(state.parsed_records)
+            state.parsed_records.clear()
+        else:
+            parsed_count = 0
 
         if not state.canonical_events:
-            normalized_events: list[CanonicalEventBase] = []
-            for event in state.collected.canonical_events:
-                if isinstance(event, LogEvent):
-                    normalized_events.append(normalize_log_event(event))
-                else:
-                    normalized_events.append(event)
-            state.canonical_events = normalized_events
+            state.canonical_events = self._normalize_canonical_events(state)
 
         return {
             "normalized_records": len(state.normalized_records),
             "canonical_events": len(state.canonical_events),
+            "parsed_records_released": parsed_count,
         }
 
+    def _normalize_canonical_events(
+        self,
+        state: _PipelineState,
+    ) -> list[CanonicalEventBase]:
+        normalized_events: list[CanonicalEventBase] = []
+        for event in state.collected.canonical_events:
+            if isinstance(event, LogEvent):
+                normalized_events.append(normalize_log_event(event))
+            else:
+                normalized_events.append(event)
+        return normalized_events
+
     async def _stage_deduplicate(self, state: _PipelineState) -> dict[str, Any]:
-        seen: set[str] = set()
-        deduped: list[NormalizedLogRecord] = []
-        for record in state.normalized_records:
-            fingerprint = compute_logical_error_fingerprint(
-                event_type=EventType.LOG,
-                service=record.service,
-                severity=record.severity,
-                normalized_message=record.normalized_message,
-            )
-            if fingerprint in seen:
-                continue
-            seen.add(fingerprint)
-            deduped.append(record)
-        removed = len(state.normalized_records) - len(deduped)
+        deduped, removed = deduplicate_normalized_records(state.normalized_records)
         state.normalized_records = deduped
         return {"kept": len(deduped), "removed": removed}
 
@@ -255,31 +261,37 @@ class InvestigationOrchestrator:
         state: _PipelineState,
     ) -> dict[str, Any]:
         if state.ingested_event_ids and state.error_group_ids:
-            return {
-                "ingested_event_ids": state.ingested_event_ids,
-                "error_group_ids": state.error_group_ids,
-            }
+            return self._group_errors_artifact(state)
 
         ingestion = EventIngestionService(self._session)
         dedupe = ErrorGroupDeduplicationService(self._session)
+        chunk_size = self._settings.investigation_ingest_chunk_size
 
-        events_to_ingest: list[CanonicalEventBase] = list(state.canonical_events)
-        for record in state.normalized_records:
-            events_to_ingest.append(
-                normalized_log_record_to_event(record, source="investigation")
-            )
+        def _event_stream() -> Any:
+            yield from state.canonical_events
+            for record in state.normalized_records:
+                yield normalized_log_record_to_event(
+                    record,
+                    source="investigation",
+                    copy_raw_data=False,
+                )
 
-        batch = await ingestion.ingest_batch(job.project_id, events_to_ingest)
+        batch = await ingestion.ingest_batches(
+            job.project_id,
+            _event_stream(),
+            chunk_size=chunk_size,
+            collect_results=True,
+        )
         for result in batch.results:
             if result.status is not IngestionStatus.ACCEPTED or result.event_id is None:
                 continue
             state.ingested_event_ids.append(result.event_id)
 
-        log_format = (
-            state.parsed_records[0].format
-            if state.parsed_records
-            else LogFormat.PLAIN_TEXT
-        )
+        # Free normalized payloads after conversion+ingest.
+        state.normalized_records.clear()
+        state.canonical_events.clear()
+
+        log_format = LogFormat.PLAIN_TEXT
         for event_id in state.ingested_event_ids:
             event = await self._session.get(Event, event_id)
             if event is None or event.event_type is not EventType.LOG:
@@ -302,8 +314,8 @@ class InvestigationOrchestrator:
                     message=event.message,
                     normalized_message=normalized_message,
                     service=None,
-                    raw_data=dict(event.raw_data),
-                    normalized_data=dict(event.normalized_data or {}),
+                    raw_data=event.raw_data or {},
+                    normalized_data=event.normalized_data or {},
                 ),
                 project_id=job.project_id,
                 source=event.source,
@@ -315,9 +327,19 @@ class InvestigationOrchestrator:
                 state.error_group_ids.append(merge_result.error_group_id)
 
         await self._session.flush()
+        return self._group_errors_artifact(state)
+
+    def _group_errors_artifact(self, state: _PipelineState) -> dict[str, Any]:
+        limit = self._settings.investigation_artifact_id_limit
+        ingested = state.ingested_event_ids
+        groups = state.error_group_ids
         return {
-            "ingested_event_ids": state.ingested_event_ids,
-            "error_group_ids": state.error_group_ids,
+            "ingested_count": len(ingested),
+            "error_group_count": len(groups),
+            "ingested_event_ids": ingested[:limit],
+            "error_group_ids": groups[:limit],
+            "ingested_event_ids_truncated": len(ingested) > limit,
+            "error_group_ids_truncated": len(groups) > limit,
         }
 
     async def _stage_timeline_bundle(
@@ -359,9 +381,7 @@ class InvestigationOrchestrator:
         return {
             "incident_id": incident.id,
             "has_package": package is not None,
-            "similar_incident_count": len(
-                state.historical_context.related_incident_ids
-            )
+            "similar_incident_count": len(state.historical_context.related_incident_ids)
             if state.historical_context is not None
             else 0,
         }
@@ -473,7 +493,10 @@ class InvestigationOrchestrator:
         if isinstance(group_artifact, dict):
             ingested = group_artifact.get("ingested_event_ids")
             groups = group_artifact.get("error_group_ids")
-            if isinstance(ingested, list):
+            truncated = bool(group_artifact.get("ingested_event_ids_truncated"))
+            # Truncated ID lists are incomplete; skip hydrate so the stage can
+            # rebuild from DB if a later stage needs a full ID set.
+            if isinstance(ingested, list) and not truncated:
                 state.ingested_event_ids = [int(item) for item in ingested]
             if isinstance(groups, list):
                 state.error_group_ids = [int(item) for item in groups]

@@ -11,8 +11,16 @@ def normalized_log_record_to_event(
     *,
     source: str,
     source_type: str = "investigation",
+    copy_raw_data: bool = True,
 ) -> LogEvent:
     """Convert a normalized log record into a canonical log event."""
+
+    raw_data = dict(record.raw_data) if copy_raw_data else record.raw_data
+    normalized_data = (
+        dict(record.normalized_data)
+        if copy_raw_data and record.normalized_data
+        else (record.normalized_data or None)
+    )
 
     return LogEvent(
         timestamp=record.timestamp,
@@ -25,8 +33,6 @@ def normalized_log_record_to_event(
         trace_id=record.trace_id,
         source=source,
         source_type=source_type,
-        raw_data=dict(record.raw_data),
-        normalized_data=(
-            dict(record.normalized_data) if record.normalized_data else None
-        ),
+        raw_data=raw_data,
+        normalized_data=normalized_data,
     )

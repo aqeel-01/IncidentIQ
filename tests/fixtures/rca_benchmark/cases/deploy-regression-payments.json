@@ -1,0 +1,183 @@
+{
+  "id": "deploy-regression-payments",
+  "description": "Clear deployment regression on payments-api.",
+  "package": {
+    "incident": {
+      "incident_id": 101,
+      "project_id": 1,
+      "title": "Payments API elevated errors after release",
+      "environment": "production",
+      "severity": "high",
+      "status": "investigating",
+      "service": "payments-api",
+      "started_at": "2026-09-01T12:00:00Z",
+      "ended_at": null,
+      "occurrence_count": 1
+    },
+    "symptoms": [
+      {
+        "id": "symptom:alert-high-error",
+        "kind": "alert",
+        "timestamp": "2026-09-01T12:20:00Z",
+        "title": "HighErrorRate",
+        "severity": "critical",
+        "service": "payments-api"
+      },
+      {
+        "id": "symptom:log-timeout",
+        "kind": "log",
+        "timestamp": "2026-09-01T12:22:00Z",
+        "title": "database timeout",
+        "severity": "error",
+        "service": "payments-api"
+      }
+    ],
+    "error_groups": [
+      {
+        "id": "error_group:db-timeout",
+        "error_group_id": null,
+        "title": "database timeout",
+        "first_seen": "2026-09-01T12:18:00Z",
+        "occurrence_count": 42,
+        "severity": "error",
+        "service": "payments-api"
+      }
+    ],
+    "anomalies": [
+      {
+        "id": "anomaly:error-rate",
+        "timestamp": "2026-09-01T12:15:00Z",
+        "metric_name": "error_rate",
+        "value": 0.91,
+        "title": "error_rate spike"
+      }
+    ],
+    "deployments": [
+      {
+        "id": "deploy:payments-v122",
+        "timestamp": "2026-09-01T12:00:00Z",
+        "title": "payments-api v1.2.2",
+        "version": "v1.2.2",
+        "service": "payments-api"
+      }
+    ],
+    "timeline": [
+      {
+        "id": "timeline:deploy",
+        "category": "deployment",
+        "timestamp": "2026-09-01T12:00:00Z",
+        "title": "Deployed payments-api v1.2.2",
+        "severity": null
+      },
+      {
+        "id": "timeline:anomaly",
+        "category": "anomaly",
+        "timestamp": "2026-09-01T12:15:00Z",
+        "title": "error_rate spike",
+        "severity": "high"
+      },
+      {
+        "id": "timeline:errors",
+        "category": "error",
+        "timestamp": "2026-09-01T12:18:00Z",
+        "title": "database timeout",
+        "severity": "error"
+      }
+    ],
+    "correlations": [
+      {
+        "kind": "deployment_to_error",
+        "source": "v1.2.2",
+        "target": "database timeout",
+        "score": 0.88,
+        "time_difference_seconds": 1080,
+        "reason": "Deployment preceded error spike"
+      }
+    ],
+    "evidence_graph": {
+      "chain": [
+        "node:deploy",
+        "node:anomaly",
+        "node:error",
+        "node:incident"
+      ],
+      "nodes": [
+        {
+          "id": "node:deploy",
+          "kind": "deployment",
+          "label": "payments-api v1.2.2",
+          "timestamp": "2026-09-01T12:00:00Z",
+          "confidence": 0.9
+        },
+        {
+          "id": "node:anomaly",
+          "kind": "anomaly",
+          "label": "error_rate spike",
+          "timestamp": "2026-09-01T12:15:00Z",
+          "confidence": 0.85
+        },
+        {
+          "id": "node:error",
+          "kind": "error",
+          "label": "database timeout",
+          "timestamp": "2026-09-01T12:18:00Z",
+          "confidence": 0.9
+        },
+        {
+          "id": "node:incident",
+          "kind": "incident",
+          "label": "Payments API elevated errors after release",
+          "timestamp": "2026-09-01T12:20:00Z",
+          "confidence": 0.95
+        }
+      ],
+      "edges": [
+        {
+          "source_id": "node:deploy",
+          "target_id": "node:anomaly",
+          "kind": "preceded",
+          "confidence": 0.85,
+          "reason": "Deploy then metric spike"
+        }
+      ],
+      "summary": "Release precedes metric and error escalation."
+    },
+    "evidence_quality": {
+      "score": 86,
+      "summary": "Synthetic evidence package for RCA evaluation.",
+      "source_diversity": 80.0,
+      "temporal_consistency": 85.0,
+      "correlation_strength": 78.0,
+      "completeness": 75.0,
+      "consistency": 80.0
+    },
+    "historical_context": null
+  },
+  "gold": {
+    "root_cause_title": "Deployment regression",
+    "root_cause_aliases": [
+      "bad deployment",
+      "faulty release",
+      "payments-api v1.2.2 regression",
+      "deploy caused outage"
+    ],
+    "expected_status": "confident",
+    "allow_no_root_cause": false,
+    "ranked_hypothesis_titles": [
+      "Deployment regression",
+      "Database saturation",
+      "Upstream dependency failure"
+    ],
+    "supporting_evidence_keys": [
+      "deploy:payments-v122",
+      "error_group:db-timeout",
+      "anomaly:error-rate",
+      "deployment_to_error"
+    ],
+    "valid_evidence_keys": [
+      "v1.2.2",
+      "database timeout",
+      "error_rate spike"
+    ]
+  }
+}

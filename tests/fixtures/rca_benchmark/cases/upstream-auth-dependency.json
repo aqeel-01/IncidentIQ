@@ -1,0 +1,162 @@
+{
+  "id": "upstream-auth-dependency",
+  "description": "Checkout outage caused by upstream auth-service failure.",
+  "package": {
+    "incident": {
+      "incident_id": 102,
+      "project_id": 1,
+      "title": "Checkout failures while auth is degraded",
+      "environment": "production",
+      "severity": "high",
+      "status": "investigating",
+      "service": "checkout-api",
+      "started_at": "2026-09-01T12:00:00Z",
+      "ended_at": null,
+      "occurrence_count": 1
+    },
+    "symptoms": [
+      {
+        "id": "symptom:auth-5xx",
+        "kind": "alert",
+        "timestamp": "2026-09-01T12:05:00Z",
+        "title": "AuthService5xx",
+        "severity": "critical",
+        "service": "auth-service"
+      },
+      {
+        "id": "symptom:checkout-timeout",
+        "kind": "log",
+        "timestamp": "2026-09-01T12:08:00Z",
+        "title": "auth token request timeout",
+        "severity": "error",
+        "service": "checkout-api"
+      }
+    ],
+    "error_groups": [
+      {
+        "id": "error_group:auth-timeout",
+        "error_group_id": null,
+        "title": "auth token request timeout",
+        "first_seen": "2026-09-01T12:06:00Z",
+        "occurrence_count": 30,
+        "severity": null,
+        "service": "checkout-api"
+      }
+    ],
+    "anomalies": [
+      {
+        "id": "anomaly:auth-latency",
+        "timestamp": "2026-09-01T12:03:00Z",
+        "metric_name": "auth_p99_latency_ms",
+        "value": 4200,
+        "title": "auth latency spike"
+      }
+    ],
+    "deployments": [],
+    "timeline": [
+      {
+        "id": "timeline:auth-latency",
+        "category": "anomaly",
+        "timestamp": "2026-09-01T12:03:00Z",
+        "title": "auth latency spike",
+        "severity": "high"
+      },
+      {
+        "id": "timeline:auth-alert",
+        "category": "alert",
+        "timestamp": "2026-09-01T12:05:00Z",
+        "title": "AuthService5xx",
+        "severity": "critical"
+      },
+      {
+        "id": "timeline:checkout-errors",
+        "category": "error",
+        "timestamp": "2026-09-01T12:08:00Z",
+        "title": "auth token request timeout",
+        "severity": "error"
+      }
+    ],
+    "correlations": [
+      {
+        "kind": "upstream_to_downstream",
+        "source": "auth-service",
+        "target": "checkout-api",
+        "score": 0.9,
+        "time_difference_seconds": 180,
+        "reason": "Auth degradation preceded checkout timeouts"
+      }
+    ],
+    "evidence_graph": {
+      "chain": [
+        "node:auth",
+        "node:checkout",
+        "node:incident"
+      ],
+      "nodes": [
+        {
+          "id": "node:auth",
+          "kind": "service",
+          "label": "auth-service",
+          "timestamp": "2026-09-01T12:03:00Z",
+          "confidence": 0.9
+        },
+        {
+          "id": "node:checkout",
+          "kind": "service",
+          "label": "checkout-api",
+          "timestamp": "2026-09-01T12:08:00Z",
+          "confidence": 0.85
+        },
+        {
+          "id": "node:incident",
+          "kind": "incident",
+          "label": "Checkout failures while auth is degraded",
+          "timestamp": "2026-09-01T12:08:00Z",
+          "confidence": 0.9
+        }
+      ],
+      "edges": [
+        {
+          "source_id": "node:auth",
+          "target_id": "node:checkout",
+          "kind": "dependency_failure",
+          "confidence": 0.9,
+          "reason": "Checkout depends on auth tokens"
+        }
+      ],
+      "summary": "Upstream auth failure cascades to checkout."
+    },
+    "evidence_quality": {
+      "score": 84,
+      "summary": "Synthetic evidence package for RCA evaluation.",
+      "source_diversity": 80.0,
+      "temporal_consistency": 85.0,
+      "correlation_strength": 78.0,
+      "completeness": 75.0,
+      "consistency": 80.0
+    },
+    "historical_context": null
+  },
+  "gold": {
+    "root_cause_title": "Upstream dependency failure",
+    "root_cause_aliases": [
+      "auth-service failure",
+      "upstream auth outage",
+      "dependency failure"
+    ],
+    "expected_status": "confident",
+    "allow_no_root_cause": false,
+    "ranked_hypothesis_titles": [
+      "Upstream dependency failure",
+      "Checkout application bug",
+      "Network partition"
+    ],
+    "supporting_evidence_keys": [
+      "symptom:auth-5xx",
+      "anomaly:auth-latency",
+      "error_group:auth-timeout",
+      "upstream_to_downstream"
+    ],
+    "valid_evidence_keys": []
+  }
+}

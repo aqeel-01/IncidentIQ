@@ -1,0 +1,123 @@
+{
+  "id": "resource-exhaustion-oom",
+  "description": "Ingest workers OOM after queue backlog.",
+  "package": {
+    "incident": {
+      "incident_id": 104,
+      "project_id": 1,
+      "title": "Worker pods crash looping under load",
+      "environment": "production",
+      "severity": "high",
+      "status": "investigating",
+      "service": "ingest-worker",
+      "started_at": "2026-09-01T12:00:00Z",
+      "ended_at": null,
+      "occurrence_count": 1
+    },
+    "symptoms": [
+      {
+        "id": "symptom:oom",
+        "kind": "alert",
+        "timestamp": "2026-09-01T12:25:00Z",
+        "title": "PodOOMKilled",
+        "severity": "critical",
+        "service": "ingest-worker"
+      }
+    ],
+    "error_groups": [
+      {
+        "id": "error_group:oom",
+        "error_group_id": null,
+        "title": "java.lang.OutOfMemoryError",
+        "first_seen": "2026-09-01T12:20:00Z",
+        "occurrence_count": 14,
+        "severity": null,
+        "service": "ingest-worker"
+      }
+    ],
+    "anomalies": [
+      {
+        "id": "anomaly:memory",
+        "timestamp": "2026-09-01T12:15:00Z",
+        "metric_name": "container_memory_working_set_bytes",
+        "value": 3900000000,
+        "title": "memory near limit"
+      },
+      {
+        "id": "anomaly:queue-depth",
+        "timestamp": "2026-09-01T12:10:00Z",
+        "metric_name": "ingest_queue_depth",
+        "value": 50000,
+        "title": "ingest queue depth surge"
+      }
+    ],
+    "deployments": [],
+    "timeline": [
+      {
+        "id": "timeline:queue",
+        "category": "anomaly",
+        "timestamp": "2026-09-01T12:10:00Z",
+        "title": "ingest queue depth surge",
+        "severity": "high"
+      },
+      {
+        "id": "timeline:memory",
+        "category": "anomaly",
+        "timestamp": "2026-09-01T12:15:00Z",
+        "title": "memory near limit",
+        "severity": "high"
+      },
+      {
+        "id": "timeline:oom",
+        "category": "alert",
+        "timestamp": "2026-09-01T12:25:00Z",
+        "title": "PodOOMKilled",
+        "severity": "critical"
+      }
+    ],
+    "correlations": [
+      {
+        "kind": "queue_to_oom",
+        "source": "ingest_queue_depth",
+        "target": "PodOOMKilled",
+        "score": 0.83,
+        "time_difference_seconds": 900,
+        "reason": "Queue surge preceded memory exhaustion"
+      }
+    ],
+    "evidence_graph": null,
+    "evidence_quality": {
+      "score": 80,
+      "summary": "Synthetic evidence package for RCA evaluation.",
+      "source_diversity": 80.0,
+      "temporal_consistency": 85.0,
+      "correlation_strength": 78.0,
+      "completeness": 75.0,
+      "consistency": 80.0
+    },
+    "historical_context": null
+  },
+  "gold": {
+    "root_cause_title": "Resource exhaustion",
+    "root_cause_aliases": [
+      "out of memory",
+      "memory exhaustion",
+      "OOM kill",
+      "capacity exhaustion"
+    ],
+    "expected_status": "confident",
+    "allow_no_root_cause": false,
+    "ranked_hypothesis_titles": [
+      "Resource exhaustion",
+      "Memory leak in worker",
+      "Bad deployment"
+    ],
+    "supporting_evidence_keys": [
+      "symptom:oom",
+      "anomaly:memory",
+      "anomaly:queue-depth",
+      "error_group:oom"
+    ],
+    "valid_evidence_keys": []
+  }
+}

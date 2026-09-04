@@ -93,6 +93,11 @@ class Settings(BaseSettings):
     log_upload_max_bytes: int = Field(default=100 * 1024 * 1024, gt=0)
     log_upload_chunk_bytes: int = Field(default=1024 * 1024, gt=0)
 
+    # Investigation ingestion chunk size for large event batches.
+    investigation_ingest_chunk_size: int = Field(default=1000, ge=1, le=100_000)
+    # Cap event/group IDs stored in stage artifacts (counts are always stored).
+    investigation_artifact_id_limit: int = Field(default=200, ge=0, le=100_000)
+
     # --- Authentication -------------------------------------------------------
     # HMAC secret for JWT access tokens. Required in production.
     # When empty in non-production, a deterministic development key is derived.

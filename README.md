@@ -187,6 +187,47 @@ ruff check .      # lint
 ruff format .     # format
 ```
 
+### End-to-end demo
+
+Run a deterministic local demo of the full investigation pipeline
+(alert → incident → collection → … → ranked RCA) without cloud services:
+
+```bash
+python -m app.domain.demo
+```
+
+This seeds logs, metrics, an alert, and a deployment for a payments-api
+regression, runs the pipeline with a fixed fake AI provider, prints the RCA
+(root cause, confidence, supporting/contradicting evidence, alternatives,
+verification steps, evidence quality), and writes `data/demo/result.json`.
+
+### RCA evaluation
+
+Compare local small, local ~7B, and Groq on a synthetic benchmark with known
+root causes (accuracy, ranking, grounding, hallucination, calibration):
+
+```bash
+# Export machine-readable dataset fixtures (optional; built-in set is default)
+python -m app.domain.rca.eval --export-dataset tests/fixtures/rca_benchmark
+
+# Run evaluation (requires configured Ollama/Groq models for live backends)
+python -m app.domain.rca.eval \
+  --backends local_small,local_7b,groq \
+  --output data/rca_eval/results.json
+```
+
+Results JSON lands under `data/rca_eval/` (gitignored via `data/`).
+
+### Ingestion / investigation performance
+
+Benchmark parse, normalize, dedupe, analysis, RCA, and chunked DB ingest at
+10K / 100K / 1M events (streaming JSONL; see `docs/performance.md`):
+
+```bash
+python -m app.domain.perf --scales 10000,100000,1000000 \
+  --output data/perf/results.json --markdown docs/performance.md
+```
+
 ## Configuration
 
 All configuration is environment-driven. See [`docs/configuration.md`](docs/configuration.md)

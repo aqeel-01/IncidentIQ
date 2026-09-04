@@ -1,0 +1,107 @@
+{
+  "id": "config-misconfiguration-search",
+  "description": "Bad config rollout breaks search index alias.",
+  "package": {
+    "incident": {
+      "incident_id": 103,
+      "project_id": 1,
+      "title": "Search API returning empty results after config change",
+      "environment": "production",
+      "severity": "medium",
+      "status": "investigating",
+      "service": "search-api",
+      "started_at": "2026-09-01T12:00:00Z",
+      "ended_at": null,
+      "occurrence_count": 1
+    },
+    "symptoms": [
+      {
+        "id": "symptom:empty-results",
+        "kind": "alert",
+        "timestamp": "2026-09-01T12:12:00Z",
+        "title": "EmptySearchResults",
+        "severity": "warning",
+        "service": "search-api"
+      }
+    ],
+    "error_groups": [
+      {
+        "id": "error_group:index-missing",
+        "error_group_id": null,
+        "title": "index alias not found",
+        "first_seen": "2026-09-01T12:10:00Z",
+        "occurrence_count": 18,
+        "severity": null,
+        "service": "search-api"
+      }
+    ],
+    "anomalies": [],
+    "deployments": [
+      {
+        "id": "deploy:config-rollout",
+        "timestamp": "2026-09-01T12:00:00Z",
+        "title": "search-api config rollout",
+        "version": "config-2026-09-01",
+        "service": "search-api"
+      }
+    ],
+    "timeline": [
+      {
+        "id": "timeline:config",
+        "category": "deployment",
+        "timestamp": "2026-09-01T12:00:00Z",
+        "title": "search-api config rollout",
+        "severity": null
+      },
+      {
+        "id": "timeline:index-error",
+        "category": "error",
+        "timestamp": "2026-09-01T12:10:00Z",
+        "title": "index alias not found",
+        "severity": "error"
+      }
+    ],
+    "correlations": [
+      {
+        "kind": "config_to_error",
+        "source": "config-2026-09-01",
+        "target": "index alias not found",
+        "score": 0.86,
+        "time_difference_seconds": 600,
+        "reason": "Config change pointed search-api at missing index alias"
+      }
+    ],
+    "evidence_graph": null,
+    "evidence_quality": {
+      "score": 78,
+      "summary": "Synthetic evidence package for RCA evaluation.",
+      "source_diversity": 80.0,
+      "temporal_consistency": 85.0,
+      "correlation_strength": 78.0,
+      "completeness": 75.0,
+      "consistency": 80.0
+    },
+    "historical_context": null
+  },
+  "gold": {
+    "root_cause_title": "Configuration error",
+    "root_cause_aliases": [
+      "misconfiguration",
+      "bad config rollout",
+      "incorrect index alias"
+    ],
+    "expected_status": "confident",
+    "allow_no_root_cause": false,
+    "ranked_hypothesis_titles": [
+      "Configuration error",
+      "OpenSearch cluster outage",
+      "Client caching bug"
+    ],
+    "supporting_evidence_keys": [
+      "deploy:config-rollout",
+      "error_group:index-missing",
+      "config_to_error"
+    ],
+    "valid_evidence_keys": []
+  }
+}

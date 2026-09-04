@@ -1,0 +1,66 @@
+{
+  "id": "insufficient-evidence-blip",
+  "description": "Sparse telemetry; model should avoid a confident wrong root cause.",
+  "package": {
+    "incident": {
+      "incident_id": 106,
+      "project_id": 1,
+      "title": "Brief blip with sparse telemetry",
+      "environment": "production",
+      "severity": "low",
+      "status": "investigating",
+      "service": "unknown-service",
+      "started_at": "2026-09-01T12:00:00Z",
+      "ended_at": null,
+      "occurrence_count": 1
+    },
+    "symptoms": [
+      {
+        "id": "symptom:brief-alert",
+        "kind": "alert",
+        "timestamp": "2026-09-01T12:00:00Z",
+        "title": "TransientLatency",
+        "severity": "warning",
+        "service": "unknown-service"
+      }
+    ],
+    "error_groups": [],
+    "anomalies": [],
+    "deployments": [],
+    "timeline": [
+      {
+        "id": "timeline:blip",
+        "category": "alert",
+        "timestamp": "2026-09-01T12:00:00Z",
+        "title": "TransientLatency",
+        "severity": "warning"
+      }
+    ],
+    "correlations": [],
+    "evidence_graph": null,
+    "evidence_quality": {
+      "score": 22,
+      "summary": "Synthetic evidence package for RCA evaluation.",
+      "source_diversity": 80.0,
+      "temporal_consistency": 85.0,
+      "correlation_strength": 78.0,
+      "completeness": 75.0,
+      "consistency": 80.0
+    },
+    "historical_context": null
+  },
+  "gold": {
+    "root_cause_title": "Insufficient evidence",
+    "root_cause_aliases": [
+      "unknown",
+      "inconclusive"
+    ],
+    "expected_status": "no_confident_root_cause",
+    "allow_no_root_cause": true,
+    "ranked_hypothesis_titles": [],
+    "supporting_evidence_keys": [
+      "symptom:brief-alert"
+    ],
+    "valid_evidence_keys": []
+  }
+}

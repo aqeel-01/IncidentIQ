@@ -1,0 +1,12 @@
+{
+  "name": "incidentiq-rca-benchmark",
+  "version": "1.0",
+  "cases": [
+    "cases/deploy-regression-payments.json",
+    "cases/upstream-auth-dependency.json",
+    "cases/config-misconfiguration-search.json",
+    "cases/resource-exhaustion-oom.json",
+    "cases/db-pool-exhaustion-orders.json",
+    "cases/insufficient-evidence-blip.json"
+  ]
+}

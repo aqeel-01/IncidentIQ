@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import enum
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -168,19 +168,22 @@ class EventIngestionService:
         self,
         project_id: int,
         events: Sequence[CanonicalEventBase | dict[str, Any]],
+        *,
+        collect_results: bool = True,
     ) -> BatchIngestionResult:
         results: list[EventIngestionResult] = []
         accepted = 0
 
         if not await self._project_exists(project_id):
-            for index in range(len(events)):
-                results.append(
-                    EventIngestionResult(
-                        index=index,
-                        status=IngestionStatus.PROJECT_NOT_FOUND,
-                        errors=[f"project {project_id} not found"],
+            if collect_results:
+                for index in range(len(events)):
+                    results.append(
+                        EventIngestionResult(
+                            index=index,
+                            status=IngestionStatus.PROJECT_NOT_FOUND,
+                            errors=[f"project {project_id} not found"],
+                        )
                     )
-                )
             return BatchIngestionResult(
                 project_id=project_id,
                 total=len(events),
@@ -195,32 +198,34 @@ class EventIngestionService:
             try:
                 event = self._coerce_event(raw)
             except ValidationError as exc:
-                results.append(
-                    EventIngestionResult(
-                        index=index,
-                        status=IngestionStatus.VALIDATION_ERROR,
-                        errors=[str(err) for err in exc.errors()],
+                if collect_results:
+                    results.append(
+                        EventIngestionResult(
+                            index=index,
+                            status=IngestionStatus.VALIDATION_ERROR,
+                            errors=[str(err) for err in exc.errors()],
+                        )
                     )
-                )
                 continue
 
             service_id: int | None = None
             if event.service:
                 resolved = await self._resolve_service(project_id, event.service)
                 if resolved is None:
-                    results.append(
-                        EventIngestionResult(
-                            index=index,
-                            status=IngestionStatus.SERVICE_NOT_FOUND,
-                            event_type=event.event_type.value,
-                            errors=[
-                                (
-                                    f"service {event.service!r} not found "
-                                    f"in project {project_id}"
-                                )
-                            ],
+                    if collect_results:
+                        results.append(
+                            EventIngestionResult(
+                                index=index,
+                                status=IngestionStatus.SERVICE_NOT_FOUND,
+                                event_type=event.event_type.value,
+                                errors=[
+                                    (
+                                        f"service {event.service!r} not found "
+                                        f"in project {project_id}"
+                                    )
+                                ],
+                            )
                         )
-                    )
                     continue
                 service_id = resolved
 
@@ -239,14 +244,15 @@ class EventIngestionService:
                     "event ingestion flush failed for project %s", project_id
                 )
                 await self._session.rollback()
-                for index, _row in rows:
-                    results.append(
-                        EventIngestionResult(
-                            index=index,
-                            status=IngestionStatus.ERROR,
-                            errors=[str(exc)],
+                if collect_results:
+                    for index, _row in rows:
+                        results.append(
+                            EventIngestionResult(
+                                index=index,
+                                status=IngestionStatus.ERROR,
+                                errors=[str(exc)],
+                            )
                         )
-                    )
                 return BatchIngestionResult(
                     project_id=project_id,
                     total=len(events),
@@ -257,15 +263,16 @@ class EventIngestionService:
 
             for index, row in rows:
                 accepted += 1
-                results.append(
-                    EventIngestionResult(
-                        index=index,
-                        status=IngestionStatus.ACCEPTED,
-                        event_id=row.id,
-                        event_type=row.event_type.value,
-                        service_id=row.service_id,
+                if collect_results:
+                    results.append(
+                        EventIngestionResult(
+                            index=index,
+                            status=IngestionStatus.ACCEPTED,
+                            event_id=row.id,
+                            event_type=row.event_type.value,
+                            service_id=row.service_id,
+                        )
                     )
-                )
 
         rejected = len(events) - accepted
         return BatchIngestionResult(
@@ -273,7 +280,60 @@ class EventIngestionService:
             total=len(events),
             accepted=accepted,
             rejected=rejected,
-            results=sorted(results, key=lambda r: r.index),
+            results=sorted(results, key=lambda r: r.index) if collect_results else [],
+        )
+
+    async def ingest_batches(
+        self,
+        project_id: int,
+        events: Iterable[CanonicalEventBase | dict[str, Any]],
+        *,
+        chunk_size: int = 1000,
+        collect_results: bool = True,
+    ) -> BatchIngestionResult:
+        """Ingest events in fixed-size chunks to bound peak memory."""
+
+        if chunk_size < 1:
+            msg = "chunk_size must be >= 1"
+            raise ValueError(msg)
+
+        combined_results: list[EventIngestionResult] = []
+        total = 0
+        accepted = 0
+        index_offset = 0
+        batch: list[CanonicalEventBase | dict[str, Any]] = []
+
+        async def _flush_batch() -> None:
+            nonlocal total, accepted, index_offset, batch
+            if not batch:
+                return
+            result = await self.ingest_batch(
+                project_id,
+                batch,
+                collect_results=collect_results,
+            )
+            total += result.total
+            accepted += result.accepted
+            if collect_results:
+                for item in result.results:
+                    combined_results.append(
+                        item.model_copy(update={"index": item.index + index_offset})
+                    )
+            index_offset += len(batch)
+            batch = []
+
+        for event in events:
+            batch.append(event)
+            if len(batch) >= chunk_size:
+                await _flush_batch()
+        await _flush_batch()
+
+        return BatchIngestionResult(
+            project_id=project_id,
+            total=total,
+            accepted=accepted,
+            rejected=total - accepted,
+            results=combined_results,
         )
 
     @staticmethod

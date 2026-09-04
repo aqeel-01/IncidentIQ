@@ -87,6 +87,35 @@ never included in API responses (only the configured secret field names are).
 | `RCA_TEMPERATURE`      | `0.1`                       | Sampling temperature, `0.0`–`2.0`.                 |
 | `RCA_MAX_TOKENS`       | `2048`                      | Max tokens for RCA generation (> 0).               |
 
+## RCA evaluation
+
+The evaluation framework (`app.domain.rca.eval`) scores RCA outputs on a
+synthetic benchmark with known root causes. Metrics:
+
+| Metric | Meaning |
+| ------ | ------- |
+| RCA accuracy | Primary hypothesis matches gold title/aliases (or correctly abstains) |
+| Hypothesis ranking | MRR of gold root cause + Kendall tau vs gold order |
+| Evidence grounding | Precision/recall/F1 of cited keys vs gold supporting keys |
+| Hallucination rate | Fraction of cited keys not present in the evidence package |
+| Confidence calibration | Expected calibration error (ECE) over confidence bins |
+
+Backends for comparison:
+
+| Backend | Provider | Settings |
+| ------- | -------- | -------- |
+| `local_small` | Ollama | `OLLAMA_MODEL_SMALL`, `RCA_MODEL` unused (forced small) |
+| `local_7b` | Ollama | `OLLAMA_MODEL_LARGE` (forced large / ~7B) |
+| `groq` | Groq | `GROQ_API_KEY`, `GROQ_MODEL` |
+
+```bash
+python -m app.domain.rca.eval --backends local_small,local_7b,groq \
+  --output data/rca_eval/results.json
+```
+
+Unavailable backends are recorded as per-case errors in the JSON report so
+comparisons remain machine-readable.
+
 ## Log uploads
 
 | Variable                  | Default           | Description                                      |

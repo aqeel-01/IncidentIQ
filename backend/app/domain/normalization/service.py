@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from app.domain.events import LogEvent
@@ -20,8 +20,16 @@ from app.domain.normalization.types import NormalizedLogRecord
 from app.domain.parsing.types import ParsedLogRecord
 
 
-def normalize_parsed_record(record: ParsedLogRecord) -> NormalizedLogRecord:
-    """Normalize a parsed log record while preserving ``raw_data`` verbatim."""
+def normalize_parsed_record(
+    record: ParsedLogRecord,
+    *,
+    copy_raw_data: bool = True,
+) -> NormalizedLogRecord:
+    """Normalize a parsed log record while preserving ``raw_data`` verbatim.
+
+    Set ``copy_raw_data=False`` on streaming hot paths to avoid duplicating the
+    raw payload when the caller will not mutate it.
+    """
 
     message = normalize_whitespace(record.message)
     normalized_message = normalize_message_pattern(message)
@@ -38,6 +46,8 @@ def normalize_parsed_record(record: ParsedLogRecord) -> NormalizedLogRecord:
         ),
     }
 
+    raw_data = dict(record.raw_data) if copy_raw_data else record.raw_data
+
     return NormalizedLogRecord(
         line_number=record.line_number,
         format=record.format,
@@ -51,14 +61,29 @@ def normalize_parsed_record(record: ParsedLogRecord) -> NormalizedLogRecord:
         trace_id=normalize_identifier(record.trace_id),
         environment=normalized_data.get("environment"),
         normalized_data={k: v for k, v in normalized_data.items() if v is not None},
-        raw_data=dict(record.raw_data),
+        raw_data=raw_data,
     )
+
+
+def iter_normalize_parsed_records(
+    records: Iterable[ParsedLogRecord],
+    *,
+    copy_raw_data: bool = False,
+) -> Iterator[NormalizedLogRecord]:
+    """Lazily normalize records without materializing an intermediate list."""
+
+    for record in records:
+        yield normalize_parsed_record(record, copy_raw_data=copy_raw_data)
 
 
 def normalize_parsed_records(
     records: Iterable[ParsedLogRecord],
+    *,
+    copy_raw_data: bool = True,
 ) -> list[NormalizedLogRecord]:
-    return [normalize_parsed_record(record) for record in records]
+    return list(
+        iter_normalize_parsed_records(records, copy_raw_data=copy_raw_data)
+    )
 
 
 def normalize_log_event(event: LogEvent) -> LogEvent:

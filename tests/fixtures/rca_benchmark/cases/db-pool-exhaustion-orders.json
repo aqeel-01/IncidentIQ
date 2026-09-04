@@ -1,0 +1,123 @@
+{
+  "id": "db-pool-exhaustion-orders",
+  "description": "Orders API stalls because the DB connection pool is exhausted.",
+  "package": {
+    "incident": {
+      "incident_id": 105,
+      "project_id": 1,
+      "title": "API latency cliff with connection wait timeouts",
+      "environment": "production",
+      "severity": "high",
+      "status": "investigating",
+      "service": "orders-api",
+      "started_at": "2026-09-01T12:00:00Z",
+      "ended_at": null,
+      "occurrence_count": 1
+    },
+    "symptoms": [
+      {
+        "id": "symptom:pool-wait",
+        "kind": "log",
+        "timestamp": "2026-09-01T12:14:00Z",
+        "title": "HikariPool connection acquisition timeout",
+        "severity": "error",
+        "service": "orders-api"
+      }
+    ],
+    "error_groups": [
+      {
+        "id": "error_group:pool-timeout",
+        "error_group_id": null,
+        "title": "HikariPool connection acquisition timeout",
+        "first_seen": "2026-09-01T12:12:00Z",
+        "occurrence_count": 55,
+        "severity": null,
+        "service": "orders-api"
+      }
+    ],
+    "anomalies": [
+      {
+        "id": "anomaly:pool-usage",
+        "timestamp": "2026-09-01T12:08:00Z",
+        "metric_name": "db_pool_active_connections",
+        "value": 100,
+        "title": "db pool saturated"
+      },
+      {
+        "id": "anomaly:latency",
+        "timestamp": "2026-09-01T12:10:00Z",
+        "metric_name": "http_request_duration_p99",
+        "value": 8.5,
+        "title": "p99 latency spike"
+      }
+    ],
+    "deployments": [
+      {
+        "id": "deploy:orders-feature",
+        "timestamp": "2026-09-01T10:00:00Z",
+        "title": "orders-api feature flag batch queries",
+        "version": "v3.4.1",
+        "service": "orders-api"
+      }
+    ],
+    "timeline": [
+      {
+        "id": "timeline:pool",
+        "category": "anomaly",
+        "timestamp": "2026-09-01T12:08:00Z",
+        "title": "db pool saturated",
+        "severity": "high"
+      },
+      {
+        "id": "timeline:timeouts",
+        "category": "error",
+        "timestamp": "2026-09-01T12:12:00Z",
+        "title": "HikariPool connection acquisition timeout",
+        "severity": "error"
+      }
+    ],
+    "correlations": [
+      {
+        "kind": "pool_to_latency",
+        "source": "db_pool_active_connections",
+        "target": "http_request_duration_p99",
+        "score": 0.87,
+        "time_difference_seconds": 120,
+        "reason": "Pool saturation aligns with latency cliff"
+      }
+    ],
+    "evidence_graph": null,
+    "evidence_quality": {
+      "score": 81,
+      "summary": "Synthetic evidence package for RCA evaluation.",
+      "source_diversity": 80.0,
+      "temporal_consistency": 85.0,
+      "correlation_strength": 78.0,
+      "completeness": 75.0,
+      "consistency": 80.0
+    },
+    "historical_context": null
+  },
+  "gold": {
+    "root_cause_title": "Database connection pool exhaustion",
+    "root_cause_aliases": [
+      "connection pool exhaustion",
+      "HikariPool exhaustion",
+      "DB pool saturated"
+    ],
+    "expected_status": "confident",
+    "allow_no_root_cause": false,
+    "ranked_hypothesis_titles": [
+      "Database connection pool exhaustion",
+      "Database host failure",
+      "Deployment regression"
+    ],
+    "supporting_evidence_keys": [
+      "anomaly:pool-usage",
+      "error_group:pool-timeout",
+      "symptom:pool-wait",
+      "pool_to_latency"
+    ],
+    "valid_evidence_keys": []
+  }
+}
